@@ -1,29 +1,96 @@
 import re
-#import discord
 import disnake
 import os
 import datetime
-
-import zipfile
+import json
+import gzip
 import time
 import asyncio
-#from discord.ext import commands, tasks
 from disnake.ext import commands, tasks
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 
-#Получаем идентификатор текущего процесса (вашего бота)
-# current_pid = os.getpid()
 
-# # Устанавливаем приоритет процесса бота
-# try:
-#     p = psutil.Process(current_pid)
-#     p.nice(psutil.HIGH_PRIORITY_CLASS)  # Установка приоритета в HIGH (высокий)
-#     print("Установлен приоритет процесса бота в HIGH (высокий).")
-# except Exception as e:
-#     print(f"Не удалось установить приоритет процесса бота: {e}")
+
+global last_use_time
+last_use_time = {}
+global moving
+moving = {}
+global move
+move = {}
+global test
+test = {}
+async def str_to_float(value_str):
+    if ',' not in value_str:
+        return float(value_str)
+    else:
+        # Убираем запятые и заменяем точки на точки с плавающей точкой
+        value_str = value_str.replace(',', '').replace('.', '.')
+        return float(value_str)
+
+
+async def create_config_directory_and_file():
+    if not os.path.exists('config'):
+        os.makedirs('config')
+    if not os.path.exists('config/config.json'):
+        default_config = {
+            'default': {
+                'commands_cooldown': {
+                    'move': 3,
+                    'moving': 10,
+                    'test': 5
+                }
+            }
+        }
+        with open('config/config.json', 'w') as f:
+            json.dump(default_config, f, indent=4)
+    else:
+        with open('config/config.json', 'r') as f:
+            try:
+                config_data = json.load(f)
+                # Проверяем структуру JSON файла
+                if 'default' not in config_data or \
+                   'commands_cooldown' not in config_data['default']:
+                    raise ValueError("Структура config.json нарушена.")
+                # Проверка других ключей и типов данных, если необходимо
+            except (json.JSONDecodeError, ValueError) as e:
+                await plogging(f"Ошибка в структуре config.json: {e}")
+
+
+async def check_user_cooldown(member_id, command_name, last_command_use):
+    try:
+        if last_command_use is not None:
+            with open('config/config.json', 'r') as f:
+                config_data = json.load(f)
+                user_group = 'default'  # По умолчанию считаем, что пользователь принадлежит к группе default
+                if str(member_id) in config_data:
+                    user_group = str(member_id)  # Если пользователь есть в конфиге, считаем его специальным
+                cooldown_time = config_data[user_group]['commands_cooldown'].get(command_name)
+                if cooldown_time is None:
+                    # Если кулдаун для команды не установлен, возвращаем значение по умолчанию
+                    cooldown_time = config_data['default']['commands_cooldown'].get(command_name)
+                if last_command_use is not None:
+                    # Вычисляем оставшееся время кулдауна
+                    current_time = datetime.datetime.now()
+                    time_difference = current_time - last_command_use
+                    # Проверяем тип cooldown_time - если это целое число (количество секунд), преобразуем его в timedelta
+                    if isinstance(cooldown_time, int):
+                        cooldown_time = datetime.timedelta(seconds=cooldown_time)
+                    remaining_cooldown = cooldown_time.total_seconds() - time_difference.total_seconds()
+                    # Округляем оставшееся время кулдауна до целого числа (без миллисекунд)
+                    remaining_cooldown = round(remaining_cooldown)
+                    # Если оставшееся время кулдауна меньше или равно нулю, возвращаем ноль
+                    if remaining_cooldown <= 0:
+                        return 0
+                    else:
+                        return remaining_cooldown
+        elif last_command_use is None:
+            return None
+    except Exception as e:
+        await plogging(f"An error occurred while checking user cooldown: {e}")
+        return None
 
 
 
@@ -32,30 +99,34 @@ if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
 
 time_now_logs = datetime.datetime.now()
-formatted_time_logs = time_now_logs.strftime("%Y_%H-%M-%S")
+formatted_time_logs = time_now_logs.strftime("%d-%m-%Y_%H-%M-%S")
 log_filename = f"log_{formatted_time_logs}.txt"
 log_filepath = os.path.join(logs_dir, log_filename)
 
 # Проверяем, существуют ли уже файлы журналов в папке
 log_files = [file for file in os.listdir(logs_dir) if file.endswith(".txt")]
 
+async def plogging(a):
+    time_now = datetime.datetime.now()  # Вызов метода now() от класса datetime.datetime
+    formatted_time = time_now.strftime("%H:%M:%S")
+    print(f"[{formatted_time}] {a}")
+    with open(log_filepath, "a", encoding="utf-8") as log_file:  # Указываем кодировку UTF-8
+        log_file.write(f"[{formatted_time}] {a} \n")
+
 if log_files:
     # Если есть файлы журналов, архивируем их
     for file in log_files:
         # Создаем архивный файл
-        archive_filename = f"{file[:-4]}_archive.zip"  # Имя архива с добавлением _archive
+        archive_filename = f"{file[:-4]}_archive.gz"  # Имя архива с добавлением _archive
         archive_filepath = os.path.join(logs_dir, archive_filename)
         
-        with zipfile.ZipFile(archive_filepath, 'w') as zipf:
-            # Добавляем текущий файл журнала в архив
-            zipf.write(os.path.join(logs_dir, file), file)
+        with open(os.path.join(logs_dir, file), 'rb') as f_in, gzip.open(archive_filepath, 'wb') as f_out:
+            f_out.writelines(f_in)
         
         # Удаляем оригинальный файл журнала
         os.remove(os.path.join(logs_dir, file))
         
         print(f"Файл журнала {file} успешно архивирован в {archive_filepath}")
-
-
 
 try:
     with open(log_filepath, 'w') as f:
@@ -63,14 +134,22 @@ try:
     print(f"Файл журнала успешно создан: {log_filepath}")
 except Exception as e:
     print(f"Ошибка при создании файла журнала: {e}")
+    
 
-async def logging(a):
-    with open(log_filepath, "a", encoding="utf-8") as log_file:  # Указываем кодировку UTF-8
-        time_now = datetime.datetime.now()  # Вызов метода now() от класса datetime.datetime
-        formatted_time = time_now.strftime("%H:%M:%S")
-        log_file.write(a + f"     {formatted_time}\n")
+    
     
 #logging/
+
+
+
+
+
+
+
+
+
+
+driver = None
 
 intents = disnake.Intents.default()
 intents.message_content = True
@@ -79,53 +158,21 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 TOKEN = 'MTA4NDM4Njk3NDk2NzgxMjE2Nw.GwfT7U.Faj3m69IdGxhvWc2IHAnXFMdoTDrGdfYhIHos0'
 
-try:
-    # запуск браузера с помощью Selenium
-    service = Service('c:\\Program Files\\chromedriver-win64\\chromedriver.exe') # путь к драйверу браузера
-    options = Options()
-    options.add_argument('--no-sandbox')  # Отключение песочницы (sandbox)
-    options.add_argument('--disable-dev-shm-usage')  # Отключение использования /dev/shm
-    options.add_argument('--disable-blink-features=AutomationControlled')  # Отключение определенных функций Blink, связанных с автоматизацией
-    options.add_argument('--disable-browser-side-navigation')  # Отключение навигации на стороне браузера
-    options.add_argument('--disable-gpu')  # Отключение GPU
-    options.add_argument('--window-size=1920,1080')  # Установка размеров окна браузера
-    options.add_argument('--disable-notifications')  # Отключение уведомлений
-    options.add_argument('--disable-extensions')  # Отключение расширений браузера
-    options.add_argument('--ignore-certificate-errors')  # Игнорирование ошибок сертификата
-    options.add_argument('--disable-popup-blocking')  # Отключение блокировки всплывающих окон
-    options.add_argument('--disable-infobars')  # Отключение информационных панелей
-    options.add_argument('--disable-plugins')  # Отключение плагинов браузера
-    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
-    options.add_argument('accept-language=en-US,en;q=0.9')
-    options.add_argument("--window-position=-2000,0")
-    # options.headless = True
-    global driver
-    driver = webdriver.Chrome(service=service, options=options)
-    # загрузка страницы и ожидание ее полной загрузки
-    url = 'https://bandit.camp/'
-    driver.get(url)
-    driver.implicitly_wait(10) # ожидание до 10 секунд    
-except Exception as e:
-    print(f"An error occurred: {e}")
-    import traceback
-    traceback.print_exc()
-    
 def driver_quit():
     driver.quit()
     
 last_check_time = None
-
+last_check_time2 = None
     
 @tasks.loop(seconds=300)
 async def restart_browser():
-    global last_check_time
-    if last_check_time is not None:
-        elapsed_time = datetime.datetime.now() - last_check_time
-        if elapsed_time.total_seconds() < 1800:  # 1800 секунд = 30 минут
+    global last_check_time2
+    if last_check_time2 is not None:
+        elapsed_time = datetime.datetime.now() - last_check_time2
+        if elapsed_time.total_seconds() < 1980:
             return
     global driver
-    print("Trying restart browser...")
-    await logging("Trying restart browser...")
+    await plogging("Trying restart browser...")
 
     if driver is not None:
         driver.quit()    
@@ -156,25 +203,13 @@ async def restart_browser():
         driver.get(url)
         driver.implicitly_wait(10) # ожидание до 10 секунд    
     except Exception as e:
-        print(f"An error occurred: {e}")
-        await logging(f"An error occurred: {e}")
+        await plogging(f"An error occurred: {e}")
         import traceback
         traceback.print_exc()
     
 
-    
-# # Поиск и установка приоритетов для процессов браузера (пример для Google Chrome)
-# browser_name = "chrome.exe"  # Замените на имя процесса вашего браузера
 
-# for process in psutil.process_iter(attrs=['pid', 'name']):
-#     if process.info['name'] == browser_name:
-#         try:
-#             process.nice(psutil.HIGH_PRIORITY_CLASS)  # Установка приоритета для процесса браузера
-#             print(f"Установлен приоритет процесса {browser_name} в HIGH (высокий).")
-#             await logging(f"Установлен приоритет процесса {browser_name} в HIGH (высокий).")
-#         except Exception as e:
-#             print(f"Не удалось установить приоритет процесса {browser_name}: {e}")
-#             await logging(f"Не удалось установить приоритет процесса {browser_name}: {e}")
+
 
             
 async def get_event_data():
@@ -186,13 +221,12 @@ async def get_event_data():
         event_div = soup.find('div', {'class': 'px-4 chat-rain-outer mb-2'})
         time_now = datetime.datetime.now()
         formatted_time = time_now.strftime("%H:%M:%S")
-        print(str(event_div) + " " + str(formatted_time))
-        await logging(str(event_div))
+        await plogging(str(event_div))
+
         if event_div is not None:
 
             event_data = event_div.text
-            print(event_data) # вывод содержимого переменной event_data в консоль
-            await logging(event_data)
+            await plogging(event_data) # вывод содержимого переменной event_data в консоль
         else:
             event_data = None
         return event_data
@@ -206,8 +240,7 @@ async def scrap_check():
         if match:
             global number
             number = match.group(1)
-            print("Number founded! " + str(number) + "\n" + str(datetime.datetime.now().strftime("%H:%M:%S")))
-            await logging("Number founded! " + str(number) + "\n")
+            await plogging("Number founded! " + str(number))
             return number
     else:
         return None
@@ -220,77 +253,26 @@ async def notify_users():
     global message
     global last_message
     channel = bot.get_channel(1084401349325762623) # замените на ID вашего канала
-    print("Sending notification")  # отладочный вывод
-    await logging("Sending notification")
+    await plogging("Sending notification")  # отладочный вывод
     sent_message = await channel.send("||@everyone||\n```fix\nRakeBack Rain NOW!!!\n" + str(datetime.datetime.now().strftime("%H:%M")) + "\n```" + "\n> **" + "--|--" + " $**")
     message = sent_message
     last_message = sent_message.id
-    print(str(last_message))
-    await logging(str(last_message))
+    await plogging(str(last_message))
+    
     
 async def edit_last_message(msg):
     global last_message
     channel = bot.get_channel(1084401349325762623) # замените на ID вашего канала
     if msg.author == bot.user:
-        print("Editing last message...")
-        await logging("Editing last message...")
+        await plogging("Editing last message...")
         message = await channel.fetch_message(last_message)
         new_message = "||@everyone||\n```fix\nRakeBack Rain NOW!!!\n" + str(datetime.datetime.now().strftime("%H:%M")) + "\n```" + "\n> **" + str(number) + " $**"
         await message.edit(content=new_message)
 
 
 
-
-
-delay = 10
-@tasks.loop(seconds=delay)
-async def check_event():
-    global last_check_time
-
-    # проверяем, прошло ли уже 30 минут с момента последнего запуска функции
-    if last_check_time is not None:
-        elapsed_time = datetime.datetime.now() - last_check_time
-        if elapsed_time.total_seconds() < 1800:  # 1800 секунд = 30 минут
-            return
-    print("Checking for event")  # отладочный вывод
-    await logging("Checking for event")
-
-    # проверяем, что на странице сайта есть информация об ивенте
-    event_data = await get_event_data()
-    if event_data is not None and "event" in event_data.lower():
-        try:
-            restart_browser.stop()
-        except:
-            pass
-        print("Rain DETECTED!")
-        await logging("Rain DETECTED!")
-        # если есть информация об ивенте, отправляем уведомление
-        print("try to send notify")
-        await logging("try to send notify")
-        await notify_users()
-        print("\n\ntry to bot_sound\n")
-        await logging("\n\ntry to bot_sound\n")
-        await bot_sound()
-        while True:
-            scrap = await scrap_check()
-            if scrap is not None:
-                print("try to edit last message...")
-                await logging("try to edit last message...")
-                await edit_last_message(message)
-                time.sleep(5)
-            else:
-                try:
-                    restart_browser.start()
-                except:
-                    pass
-                break
-    # сохраняем текущее время как время последнего запуска функции
-        last_check_time = datetime.datetime.now()
-    
-    
-        
 @bot.event
-async def bot_sound():
+async def bot_sound2():
     # Получаем список всех голосовых каналов на сервере
     guild = bot.guilds[0]
     voice_channels = guild.voice_channels
@@ -309,47 +291,158 @@ async def bot_sound():
             voice = bot.voice_clients[0]
             if voice.is_connected():
                 await voice.disconnect()
+
+        # Подключаемся к голосовому каналу
         voice = await channel.connect()
-        await asyncio.sleep(1)
+        # Получаем аудиоисточник
+        await asyncio.sleep(0.5)
+
         # Покидаем канал
         if voice.is_connected():
             await voice.disconnect()
-    
-@bot.event
-async def on_ready():
-    check_event.start()
-    restart_browser.start()
-    channel = bot.get_channel(1084401349325762623)
-    print('Bot is ready!')
-    await logging('Bot is ready!')
-    # await channel.send("> **Now the bot is active.:green_circle:**")
+
+
+delay = 10
+@tasks.loop(seconds=delay)
+async def check_event():
+    global last_check_time
+    # проверяем, прошло ли уже 30 минут с момента последнего запуска функции
+    if last_check_time is not None:
+        elapsed_time = datetime.datetime.now() - last_check_time
+        if elapsed_time.total_seconds() < 1800:  # 1800 секунд = 30 минут
+            return
+    await plogging("Checking for event")  # отладочный вывод
+
+    # проверяем, что на странице сайта есть информация об ивенте
+    event_data = await get_event_data()
+    if event_data is not None and "event" in event_data.lower():
+        global last_check_time2
+        last_check_time2 = datetime.datetime.now()
+       
+        await plogging("Rain DETECTED!")
+        # если есть информация об ивенте, отправляем уведомление
+        
+        await plogging("try to send notify")
+        await notify_users()
+       
+        await plogging("try to bot_sound")
+        scrap = await scrap_check()
+        await bot_sound(scrap)
+        
+        while True:
+            old_scrap = scrap
+            recent_scrap = await str_to_float(scrap) - await str_to_float(old_scrap)
+            if old_scrap is not None and recent_scrap >= 100:
+                await bot_sound2()
+            scrap = await scrap_check()
+            if scrap is not None:
+                
+                await plogging("try to edit last message...")
+                await edit_last_message(message)
+                time.sleep(5)
+            else:
+                break
+    # сохраняем текущее время как время последнего запуска функции
+        last_check_time = datetime.datetime.now()
     
 
+async def play_audio(path, time_sleep, voice):
+    audio_source = disnake.FFmpegPCMAudio(path)
+    # Обертываем аудиоисточник для установки громкости
+    audio_source = disnake.PCMVolumeTransformer(audio_source)
+    audio_source.volume = 0.5
+    # Воспроизводим аудиоисточник в голосовом канале
+    voice.play(audio_source)
+    # Ждем некоторое время
+    await asyncio.sleep(time_sleep)  # Пример: звук будет проигрываться в течение 10 секунд    
+    
+@bot.event
+async def bot_sound(scrap):
+    # Получаем список всех голосовых каналов на сервере
+    guild = bot.guilds[0]
+    voice_channels = guild.voice_channels
+
+    # Создаем список каналов с пользователями
+    channels_with_users = [channel for channel in voice_channels if len(channel.members) > 0]
+
+    # Если нет каналов с пользователями, то выходим из функции
+    if len(channels_with_users) == 0:
+        return
+
+    # Подключаемся по очереди ко всем каналам с пользователями
+    for channel in channels_with_users:
+        # Если уже подключены к голосовому каналу, отключаемся перед подключением к следующему
+        if bot.voice_clients:
+            voice = bot.voice_clients[0]
+            if voice.is_connected():
+                await voice.disconnect()
+
+        # Подключаемся к голосовому каналу
+        voice = await channel.connect()
+        if await str_to_float(scrap) < 300:
+            await play_audio("sound.wav", 4, voice)
+        elif await str_to_float(scrap) >= 300:
+            await play_audio("alert.m4a", 12, voice)
+        # Получаем аудиоисточник
+
+
+        # Покидаем канал
+        if voice.is_connected():
+            await voice.disconnect()
+
+    
+
+  
+  
+  
+  
+  
+  
+  
+
 @bot.slash_command(name="moving", description="Move a user tuda syuda.")
-async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member):
+async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member):
     try:
         await ctx.response.defer(ephemeral=True)
-        with open(log_filepath, "a", encoding="utf-8") as log_file:  # Указываем кодировку UTF-8
-            time_now = datetime.datetime.now()  # Вызов метода now() от класса datetime.datetime
-            formatted_time = time_now.strftime("%H:%M:%S")
-            log_file.write(f"Command   'moving'   was used by   {ctx.author.display_name}   at {formatted_time}\nTry to moving {member.display_name}\n\n")
-            print(f"Command   'moving'   was used by   {ctx.author.display_name}   at {formatted_time}\n")
+        
+        await plogging(f"Command   'moving'   was used by   {ctx.author.display_name}\nTry to moving {member.display_name}")
         # Проверяем, присоединен ли участник к голосовому каналу
+        if ctx.author.voice is None or ctx.author.voice.channel is None:
+            await plogging(f"User {ctx.author.display_name} is not in a voice channel.")
+            await ctx.followup.send(f"You are not in a voice channel!")
+            return
         if member.voice is None or member.voice.channel is None:
             await ctx.followup.send(f"{member.mention} is not connected to a voice channel.")
             return
         
+        user_id = ctx.author.id
+        if not hasattr(moving, 'last_use_time'):
+            moving.last_use_time = {}  # Создаем словарь для хранения времени последнего использования команды
+           
+        
+        user_id = ctx.author.id
+        if user_id in moving.last_use_time:
+            last_use_time = moving.last_use_time[user_id]
+            cooldown = await check_user_cooldown(member_id=user_id, command_name="moving", last_command_use=last_use_time)
+            if cooldown != 0:
+                await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
+                await plogging(f"User have a {cooldown} sec. cooldown.")
+                return
+
+        # Устанавливаем текущее время как время последнего использования команды для данного пользователя
+        moving.last_use_time[user_id] = datetime.datetime.now()
+
         # Получаем текущий канал участника
         current_channel = member.voice.channel
         channel1 = ctx.guild.get_channel(1212058316138872902)
         channel2 = ctx.guild.get_channel(1212058374796218459)
-        for i in range(1, 3, 1):
+        for i in range(1, 2, 1):
             # Перемещаем участника в указанный канал
             await member.move_to(channel1)
             # Перемещаем участника обратно в исходный канал
             await member.move_to(channel2)
         await member.move_to(current_channel) 
-        await ctx.followup.send("Successfully")   
+        await ctx.followup.send("Successfully")
     except disnake.errors.Forbidden:
         await ctx.followup.send("I don't have permissions to move users.")
     except disnake.errors.HTTPException:
@@ -359,17 +452,35 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
 async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member, channel: disnake.VoiceChannel):
     try:
         await ctx.response.defer(ephemeral=True)
-        with open(log_filepath, "a", encoding="utf-8") as log_file:
-            time_now = datetime.datetime.now()
-            formatted_time = time_now.strftime("%H:%M:%S")
-            log_file.write(f"Command 'move' was used by {ctx.author.display_name}\nTry to move {member.display_name} to {channel.name} at {formatted_time}\n\n")
-            print(f"Command 'move' was used by {ctx.author.display_name} Try to move {member.display_name} to {channel.name} at {formatted_time}\n")
+        
+        await plogging(f"Command 'move' was used by {ctx.author.display_name}\nTry to move {member.display_name} to {channel.name}")
+
         # Проверяем, подключен ли участник к каналу
+        if ctx.author.voice is None or ctx.author.voice.channel is None:
+            await plogging(f"User {ctx.author.display_name} is not in a voice channel.")
+            await ctx.followup.send(f"You are not in a voice channel!")
+            return
         if member.voice is None or member.voice.channel is None:
             await ctx.followup.send(f"{member.mention} is not connected to a voice channel.")
             return
+        user_id = ctx.author.id
+        if not hasattr(move, 'last_use_time'):
+            move.last_use_time = {}  # Создаем словарь для хранения времени последнего использования команды
+        
+        user_id = ctx.author.id
+        if user_id in move.last_use_time:
+            last_use_time = move.last_use_time[user_id]
+            cooldown = await check_user_cooldown(member_id=user_id, command_name="move", last_command_use=last_use_time)
+            if cooldown != 0:
+                await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
+                await plogging(f"User have a {cooldown} sec. cooldown.")
+                return
+
+        # Устанавливаем текущее время как время последнего использования команды для данного пользователя
+        move.last_use_time[user_id] = datetime.datetime.now()
+
         await member.move_to(channel)
-        await ctx.followup.send(f"{member.mention} successfully moved to {channel.mention}.")
+        await ctx.followup.send(f"{member.mention} successfully moved to {channel.mention}.")        
     except disnake.errors.Forbidden:
         await ctx.followup.send("I don't have permissions to move users.")
     except disnake.errors.HTTPException:
@@ -380,14 +491,63 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
     
 @bot.slash_command(name="test", description="test command.")
 async def test(ctx):
-    await ctx.response.defer(ephemeral=True)
-    with open(log_filepath, "a", encoding="utf-8") as log_file:  # Указываем кодировку UTF-8
-        time_now = datetime.datetime.now()  # Вызов метода now() от класса datetime.datetime
-        formatted_time = time_now.strftime("%H:%M:%S")
-        log_file.write(f"Command   'test'   was used by   {ctx.author.display_name}   at {formatted_time}\n")
-        print(f"Command   'test'   was used by   {ctx.author.display_name}   at {formatted_time}\n")    
-    await ctx.followup.send("test successfully!")
 
+    await plogging(f"Command 'test' was used by {ctx.author.display_name}")
+
+    await ctx.response.defer(ephemeral=True)
+    user_id = ctx.author.id
+    if not hasattr(test, 'last_use_time'):
+        test.last_use_time = {}  # Создаем словарь для хранения времени последнего использования команды
+    
+    user_id = ctx.author.id
+    if user_id in test.last_use_time:
+        last_use_time = test.last_use_time[user_id]
+        cooldown = await check_user_cooldown(member_id=user_id, command_name="test", last_command_use=last_use_time)
+        if cooldown != 0:
+            await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
+            await plogging(f"User have a {cooldown} sec. cooldown.")
+            return
+
+    # Устанавливаем текущее время как время последнего использования команды для данного пользователя
+    test.last_use_time[user_id] = datetime.datetime.now()
+
+    await ctx.followup.send("test successfully!")  
+    
+    
+    
+    
+    
+@bot.event
+async def on_ready():
+    await create_config_directory_and_file()
+    restart_browser.start()
+    check_event.start()
+    channel = bot.get_channel(1084401349325762623)
+    await plogging('Bot is ready!')
+    # await channel.send("> **Now the bot is active.:green_circle:**")
+        
+    
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if before.channel != after.channel:
+        if after.channel is None:
+            await plogging(f"{member.display_name} left the voice channel {before.channel.name}.")
+        elif before.channel is None:   
+            await plogging(f"{member.display_name} joined to {after.channel.name}.")
+        else:   
+            await plogging(f"{member.display_name} moved from {before.channel.name} to {after.channel.name}.")
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 try:
     bot.run(TOKEN)
