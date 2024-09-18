@@ -1,0 +1,6 @@
+RainStart.bat
+RAINstart.lnk
+logs/
+stats/
+RainBotAPI.py
+__pycache__/

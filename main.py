@@ -187,24 +187,25 @@ last_check_time2 = None
 
 async def close_old_browsers():
     chrome_processes = [proc for proc in psutil.process_iter(['pid', 'name']) if proc.info['name'] == 'chrome.exe']
-
+    
     async def terminate_process_tree(pid):
         try:
             process = psutil.Process(pid)
-            children = process.children(recursive=True)  # Получаем всех дочерних процессов
+            children = process.children(recursive=True)
             for child in children:
                 try:
-                    child.kill()  # Убиваем дочерние процессы
+                    child.kill()
                     await plogging(f"Terminated child process with PID: {child.pid}")
                 except Exception as e:
                     await plogging(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
-            process.kill()  # Убиваем родительский процесс
+            process.kill()
             await plogging(f"Terminated process with PID: {pid}")
         except Exception as e:
             await plogging(f"Failed to terminate process with PID: {pid}, error: {e}")
 
     for proc in chrome_processes:
         await terminate_process_tree(proc.info['pid'])
+    await asyncio.sleep(2)  # Небольшая задержка для освобождения ресурсов
 
 service = Service('c:\\Program Files\\chromedriver-win64\\chromedriver.exe') # путь к драйверу браузера
 options = Options()
@@ -237,30 +238,32 @@ last_check_time2 = None
 
 @tasks.loop(seconds=300)
 async def restart_browser():
-    global last_check_time2
+    global last_check_time2, driver
+
     if last_check_time2 is not None:
         elapsed_time = datetime.datetime.now() - last_check_time2
         if elapsed_time.total_seconds() < 1680:
             return
-    global driver
-    await plogging("Trying to restart browser...")
     
+    await plogging("Trying to restart browser...")
+
     if driver is not None:
-        driver.quit()
+        try:
+            driver.quit()
+            print("Browser successfully quit.")
+        except Exception as e:
+            print(f"Failed to quit browser: {e}")
+        driver = None
+
     await close_old_browsers()
+
     try:
-        # options.headless = True
-        
         driver = webdriver.Chrome(service=service, options=options)
-        # загрузка страницы и ожидание ее полной загрузки
         url = 'https://bandit.camp/'
         driver.get(url)
-        driver.implicitly_wait(10) # ожидание до 10 секунд    
+        driver.implicitly_wait(5)  # ожидание до 5 секунд
     except Exception as e:
-        await plogging(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()
-    
+        await plogging(f"An error occurred during browser restart: {e}")
 
 #██████╗░░█████╗░██╗███╗░░██╗  ░██████╗███████╗░█████╗░██████╗░░█████╗░██╗░░██╗
 #██╔══██╗██╔══██╗██║████╗░██║  ██╔════╝██╔════╝██╔══██╗██╔══██╗██╔══██╗██║░░██║
@@ -272,6 +275,7 @@ async def restart_browser():
 
             
 async def get_event_data():
+    if driver is not None:
         # получение HTML-кода страницы после выполнения JavaScript
         html = driver.execute_script("return document.documentElement.outerHTML")
         soup = BeautifulSoup(html, 'html.parser')
@@ -289,7 +293,8 @@ async def get_event_data():
         else:
             event_data = None
         return event_data
-        
+    else:
+        return 'E'
     
 async def scrap_check(): 
     event_data = await get_event_data()
@@ -577,7 +582,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             await ctx.followup.send(embed=embed)
             return
     #koja protection
-        if member.id == 595255205348507678:
+        if member.id in (595255205348507678, 1084386974967812167):
             embed = disnake.Embed(
                 description=f"This user has immunity.",
                 colour=0xF0C43F,
@@ -666,7 +671,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             await ctx.followup.send(embed=embed)
             return
     #koja protection
-        if member.id == 595255205348507678:
+        if member.id in (595255205348507678, 1084386974967812167):
             embed = disnake.Embed(
                 description=f"This user has immunity.",
                 colour=0xF0C43F,
