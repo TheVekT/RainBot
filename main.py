@@ -15,6 +15,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from bs4 import BeautifulSoup
+from disnake import app_commands
 
 
 
@@ -509,10 +510,28 @@ async def bot_sound(play_audio_func=None, *play_audio_args, channel_id=None):
 #██║░░██╗██║░░██║██║╚██╔╝██║██║╚██╔╝██║██╔══██║██║╚████║██║░░██║░╚═══██╗
 #╚█████╔╝╚█████╔╝██║░╚═╝░██║██║░╚═╝░██║██║░░██║██║░╚███║██████╔╝██████╔╝
 #░╚════╝░░╚════╝░╚═╝░░░░░╚═╝╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝╚═════╝░╚═════╝░
-  
-  
-  
-  
+
+# Определяем ID разрешённых голосовых каналов
+ALLOWED_VOICE_CHANNEL_IDS = [1168637408896622672, 901174980673425408, 1168637791278739497]
+
+# Функция для автодополнения
+async def autocomplete_voice_channels(interaction: disnake.ApplicationCommandInteraction, user_input: str):
+    # Получаем все голосовые каналы на сервере
+    guild = interaction.guild
+    allowed_channels = [
+        channel for channel in guild.voice_channels
+        if channel.id in ALLOWED_VOICE_CHANNEL_IDS
+    ]
+
+    # Фильтруем каналы по имени с учётом пользовательского ввода
+    choices = [
+        disnake.OptionChoice(name=channel.name, value=str(channel.id))
+        for channel in allowed_channels
+        if user_input.lower() in channel.name.lower()
+    ]
+
+    return choices[:25]  # Ограничиваем 25 вариантами
+
 @bot.slash_command(name="shlepki", description="Play sound shlepki.")
 async def shlepki(ctx):
     await plogging(f"Command 'shlepki' was used by {ctx.author.display_name}")
@@ -642,12 +661,13 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
         await ctx.followup.send("Failed to move the user.")
         
 @bot.slash_command(name="move", description="Move a user to a specified voice channel.")
-async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member, channel: disnake.VoiceChannel):
+async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member, channel: str = commands.Param(autocomplete=autocomplete_voice_channels)):
+    
     try:
+        channel = ctx.guild.get_channel(int(channel))
         await ctx.response.defer(ephemeral=True)
         
         await plogging(f"Command 'move' was used by {ctx.author.display_name}\nTry to move {member.display_name} to {channel.name}")
-
         # Проверяем, подключен ли участник к каналу
         if ctx.author.voice is None or ctx.author.voice.channel is None:
             embed = disnake.Embed(
@@ -682,7 +702,9 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             await ctx.followup.send(embed=embed)
         
             return
-            
+        
+        
+
         user_id = ctx.author.id
         if not hasattr(move, 'last_use_time'):
             move.last_use_time = {}  # Создаем словарь для хранения времени последнего использования команды
