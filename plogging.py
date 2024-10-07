@@ -2,7 +2,14 @@ import os
 import gzip
 import datetime
 
+
 logs_dir = "./logs"
+log_history = []
+log_filepath = None
+web_sharing = False
+global sharing
+sharing = False
+
 
 if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
@@ -22,9 +29,9 @@ def create_log_file():
     try:
         with open(log_filepath, 'w') as f:
             pass
-        print(f"Файл журнала успешно создан: {log_filepath}")
+        print(f"Log file created: {log_filepath}")
     except Exception as e:
-        print(f"Ошибка при создании файла журнала: {e}")
+        print(f"Error on creating log file: {e}")
 
 def archive_logs():
     """Архивирует старые файлы журнала и удаляет их."""
@@ -39,7 +46,7 @@ def archive_logs():
                 f_out.writelines(f_in)
             
             os.remove(os.path.join(logs_dir, file))
-            print(f"Файл журнала {file} успешно архивирован в {archive_filepath}")
+            print(f"Log file {file} successfully zipped in {archive_filepath}")
 
 def enable_logging():
     """Включает логирование, архивирует старые файлы и создает новый файл журнала."""
@@ -51,7 +58,6 @@ def get_current_date():
     return datetime.datetime.now().strftime("%Y-%m-%d")
 
 last_log_date = get_current_date()
-log_filepath = None
 
 async def plogging(a):
     global log_filepath, last_log_date
@@ -65,12 +71,20 @@ async def plogging(a):
         create_log_file()
         last_log_date = current_date
 
+    from rainbotAPI_server import is_client_connected, send_packet
     # Логируем сообщение
     time_now = datetime.datetime.now()
     formatted_time = time_now.strftime("%H:%M:%S")
     print(f"[{formatted_time}] {a}")
+    new_log_message = (f"[{formatted_time}] {a}")
+    if is_client_connected():
+        await send_packet('new_log_message', new_log_message)
+
+    log_history.append(new_log_message)
     with open(log_filepath, "a", encoding="utf-8") as log_file:
         log_file.write(f"[{formatted_time}] {a} \n")
 
-# Выполнить начальную настройку
-enable_logging()
+def get_history():
+    return list(log_history) if log_history is not None else "Log history clear."
+def get_last_log_message():
+    return str(log_history[-1:])

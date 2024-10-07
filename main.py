@@ -7,7 +7,8 @@ import gzip
 import time
 import asyncio
 import psutil
-from plogging import plogging
+import rainbotAPI_server as rbs
+from plogging import plogging, enable_logging
 import stats
 from disnake.ext import commands, tasks
 from selenium import webdriver
@@ -18,6 +19,7 @@ from bs4 import BeautifulSoup
 from disnake import app_commands
 
 
+enable_logging()
 
 
 
@@ -849,7 +851,7 @@ async def on_ready():
     check_event.start()
     channel = bot.get_channel(1084401349325762623)
     await plogging('Bot is ready!')
-    # await channel.send("> **Now the bot is active.:green_circle:**")
+    asyncio.create_task(rbs.start_server())
         
     
      
