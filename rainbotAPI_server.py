@@ -10,14 +10,15 @@ registered_functions = [
 
 # Глобальная переменная для хранения текущего подключения WebSocket
 current_websocket = None
-
+recursion_guard = False
 def execute_func(func_name, arguments):
     processed_args = [arg if arg.isdigit() else f"'{arg}'" for arg in arguments]
     eval_command = f"{func_name}({', '.join(processed_args)})"
     eval(eval_command)
 
 async def send_packet(type, message):
-    global current_websocket
+    global current_websocket, recursion_guard
+
     if current_websocket:
         try:
             response = {
@@ -25,8 +26,15 @@ async def send_packet(type, message):
                 "logs": message
             }
             await current_websocket.send(json.dumps(response))
+        
         except Exception as e:
-            print(f"Error sending logs: {e}")
+            # Защита от рекурсивного вызова plogging
+            if not recursion_guard:
+                recursion_guard = True  # Активируем защиту
+                await plogging(f"Error sending logs: {e}")
+                recursion_guard = False  # Деактивируем защиту
+            else:
+                print(f"Recursion error: {e}")
 
 async def send_logging_history():
     global current_websocket
@@ -39,12 +47,12 @@ async def send_logging_history():
             }
             await current_websocket.send(json.dumps(response))
         except Exception as e:
-            print(f"Error sending logs: {e}")
+            await plogging(f"Error sending logs: {e}")
 
 async def handler(websocket, path):
     global current_websocket
     current_websocket = websocket
-    print(f"New connection: {websocket.remote_address}")
+    await plogging(f"New connection: {websocket.remote_address}")
     try:
         async for message in websocket:
             print(f"Message received from {websocket.remote_address}: {message}")
@@ -65,21 +73,21 @@ async def handler(websocket, path):
                 response = {"type": "error", "message": "Error: Command should start with '/' or '@'."}
                 await websocket.send(json.dumps(response))
     except websockets.exceptions.ConnectionClosed as e:
-        print(f"Connection closed: {websocket.remote_address}, reason: {e.code} - {e.reason}")
+        await plogging(f"Connection closed: {websocket.remote_address}, reason: {e.code} - {e.reason}")
     except Exception as e:
-        print(f"Error with {websocket.remote_address}: {e}")
+        await plogging(f"Error with {websocket.remote_address}: {e}")
     finally:
         current_websocket = None
-        print(f"Client {websocket.remote_address} disconnected. Waiting for new connections.")
+        await plogging(f"Client {websocket.remote_address} disconnected. Waiting for new connections.")
 
 async def start_server():
     while True:
         try:
-            server = await websockets.serve(handler, "192.168.0.108", 8765)
-            print("WebSocket opened on ws://192.168.0.108:8765")
+            server = await websockets.serve(handler, "192.168.0.106", 8765)
+            await plogging("WebSocket opened on ws://192.168.0.106:8765")
             await server.wait_closed()
         except Exception as e:
-            print(f"Server error: {e}")
+            await plogging(f"Server error: {e}")
             await asyncio.sleep(5)
 
 def is_client_connected():

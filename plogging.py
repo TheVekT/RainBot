@@ -58,31 +58,45 @@ def get_current_date():
     return datetime.datetime.now().strftime("%Y-%m-%d")
 
 last_log_date = get_current_date()
+# Флаг для предотвращения рекурсии в логировании
+recursion_guard = False
 
 async def plogging(a):
-    global log_filepath, last_log_date
+    global log_filepath, last_log_date, recursion_guard
 
-    current_date = get_current_date()
-    if current_date != last_log_date:
-        # Дата изменилась, закрываем и архивируем текущий файл
-        if log_filepath and os.path.exists(log_filepath):
-            archive_logs()
-        # Создаем новый файл для журнала
-        create_log_file()
-        last_log_date = current_date
+    # Если произошла ошибка, предотвращаем рекурсию
+    if recursion_guard:
+        print(f"Recursion prevented: {a}")
+        return
 
-    from rainbotAPI_server import is_client_connected, send_packet
-    # Логируем сообщение
-    time_now = datetime.datetime.now()
-    formatted_time = time_now.strftime("%H:%M:%S")
-    print(f"[{formatted_time}] {a}")
-    new_log_message = (f"[{formatted_time}] {a}")
-    if is_client_connected():
-        await send_packet('new_log_message', new_log_message)
+    try:
+        current_date = get_current_date()
+        if current_date != last_log_date:
+            # Дата изменилась, закрываем и архивируем текущий файл
+            if log_filepath and os.path.exists(log_filepath):
+                archive_logs()
+            # Создаем новый файл для журнала
+            create_log_file()
+            last_log_date = current_date
 
-    log_history.append(new_log_message)
-    with open(log_filepath, "a", encoding="utf-8") as log_file:
-        log_file.write(f"[{formatted_time}] {a} \n")
+        from rainbotAPI_server import is_client_connected, send_packet
+
+        # Логируем сообщение
+        time_now = datetime.datetime.now()
+        formatted_time = time_now.strftime("%H:%M:%S")
+        print(f"[{formatted_time}] {a}")
+        new_log_message = f"[{formatted_time}] {a}"
+
+        # Проверка, подключен ли клиент, перед отправкой
+        if is_client_connected():
+            await send_packet('new_log_message', new_log_message)
+
+        log_history.append(new_log_message)
+        with open(log_filepath, "a", encoding="utf-8") as log_file:
+            log_file.write(f"[{formatted_time}] {a} \n")
+    
+    except Exception as e:
+        print(f"Error in plogging: {e}")
 
 def get_history():
     return list(log_history) if log_history is not None else "Log history clear."
