@@ -214,8 +214,9 @@ class Plogging:
             formatted_time = time_now.strftime("%H:%M:%S")
             self.last_log_message = f"[{formatted_time}][{level.upper()}]: {text}"
             if self._wb_translate[level] == True:
-                self.on_log_message.emit()
                 self.log_history.append(self.last_log_message)
+                self.on_log_message.emit()
+                
             print(self.last_log_message)
             log_file_path = self.log_filepaths[level]
             with open(log_file_path, "a", encoding="utf-8") as log_file:
