@@ -10,8 +10,8 @@ from utils import PlaySoundOnBot, RainParser, ConfigManager
 
 
 plogging = Plogging()
-plogging.set_websocket_settings(debug=False)
-plogging.set_folders(info='main_logs', error='main_logs', warn='main_logs', debug='debug_logs')
+plogging.set_websocket_settings(debug=False, error=False)
+plogging.set_folders(info='main_logs', error='debug_logs', warn='main_logs', debug='debug_logs')
 plogging.enable_logging()
 
 intents = disnake.Intents.default()
@@ -90,12 +90,13 @@ async def autocomplete_voice_channels(interaction: disnake.ApplicationCommandInt
 
 @bot.slash_command(name="shlepki", description="Play sound shlepki.")
 async def shlepki(ctx):
-    await plogging(f"Command 'shlepki' was used by {ctx.author.display_name}")
+    await plogging.info(f"Command 'shlepki' was used by {ctx.author.display_name}")
 
     await ctx.response.defer(ephemeral=True)
-
+    
     channel_id = ctx.author.voice.channel.id if ctx.author.voice else None
     if not channel_id:
+        await plogging.info(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
         await ctx.followup.send("You need to be in a voice channel to use this command.")
         return
     user_id = ctx.author.id
@@ -108,7 +109,7 @@ async def shlepki(ctx):
         cooldown = await cdown.check_user_cooldown(member_id=user_id, command_name="shlepki", last_command_use=last_use_time)
         if cooldown != 0:
             await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
-            await plogging(f"User have a {cooldown} sec. cooldown.")
+            await plogging.info(f"Declined. User have a {cooldown} sec. cooldown.")
             return   
         
   # Устанавливаем текущее время как время последнего использования команды для данного пользователя
@@ -116,7 +117,6 @@ async def shlepki(ctx):
 
     # Запускаем воспроизведение звука асинхронно
     asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72), channel_id=channel_id))
-
     embed = disnake.Embed(
         description="Playing sound.",
         colour=0xF0C43F,
@@ -136,7 +136,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
         await plogging.info(f"Command   'moving'   was used by   {ctx.author.display_name}\nTry to moving {member.display_name}")
         # Проверяем, присоединен ли участник к голосовому каналу
         if ctx.author.voice is None or ctx.author.voice.channel is None:
-            await plogging.warn(f"User {ctx.author.display_name} is not in a voice channel.")
+            await plogging.info(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
             embed = disnake.Embed(
                 description=f"You are not in a voice channel!",
                 colour=0xF0C43F,
@@ -147,6 +147,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             await ctx.followup.send(embed=embed)
             return
         if member.voice is None or member.voice.channel is None:
+            await plogging.info(f"Declined. Target {member.display_name} is not in a voice channel.")
             embed = disnake.Embed(
                 description=f"{member.mention} is not connected to a voice channel.",
                 colour=0xF0C43F,
@@ -158,6 +159,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             return
     #koja protection
         if member.id in (595255205348507678, 1084386974967812167):
+            await plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
                 colour=0xF0C43F,
@@ -187,7 +189,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
                     text="© RainBot",
                 ) 
                 await ctx.followup.send(embed=embed)
-                await plogging.info(f"User have a {cooldown} sec. cooldown.")
+                await plogging.info(f"Declined. User have a {cooldown} sec. cooldown.")
                 return
 
         # Устанавливаем текущее время как время последнего использования команды для данного пользователя
@@ -233,10 +235,11 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             embed.set_footer(
                 text="© RainBot",
             )
-            await plogging.warn(f"User {ctx.author.display_name} is not in a voice channel.")
+            await plogging.warn(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
             await ctx.followup.send(embed=embed)
             return
         if member.voice is None or member.voice.channel is None:
+            await plogging.warn(f"Declined. Target {member.display_name} is not in a voice channel.")
             embed = disnake.Embed(
                 description=f"{member.mention} is not connected to a voice channel.",
                 colour=0xF0C43F,
@@ -248,6 +251,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             return
     #koja protection
         if member.id in (595255205348507678, 1084386974967812167):
+            await plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
                 colour=0xF0C43F,
@@ -299,6 +303,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
         await ctx.followup.send("Failed to move the user.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {e}", ephemeral=True)
+
 """
 @bot.slash_command(name="getstats", description="Get user statistics.")
 async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member):

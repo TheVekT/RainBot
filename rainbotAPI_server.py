@@ -79,7 +79,7 @@ class WebSocketServer:
 
         try:
             async for message in websocket:
-                await self.plogging.info(f"Message received from {websocket.remote_address}: {message}")
+                await self.plogging.debug(f"Message received from {websocket.remote_address}: {message}")
                 if message.startswith('@'):
                     if message[1:] == 'get_logs':
                         await self.send_packet(websocket=websocket, type='logs', message=self.plogging.get_history())

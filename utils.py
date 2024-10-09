@@ -88,7 +88,7 @@ class RainParser:
                         child.kill()
                         await self.plogging.debug(f"Terminated child process with PID: {child.pid}")
                     except Exception as e:
-                        await self.plogging.warn(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
+                        await self.plogging.error(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
                 process.kill()
                 await self.plogging.debug(f"Terminated process with PID: {pid}")
             except Exception as e:
@@ -224,7 +224,7 @@ class RainParser:
             elapsed_time = datetime.datetime.now() - self.last_check_time
             if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
                 return
-        await self.plogging.info("Checking for event")  # отладочный вывод
+        await self.plogging.debug("Checking for event")  # отладочный вывод
         # проверяем, что на странице сайта есть информация об ивенте
         event_data = await self._get_event_data()
         if event_data is not None and "event" in event_data.lower():
@@ -232,10 +232,10 @@ class RainParser:
             await self.plogging.info("Rain DETECTED!")
             # если есть информация об ивенте, отправляем уведомление
             
-            await self.plogging.info("Try to send notify about rain")
+            await self.plogging.debug("Try to send notify about rain")
             await self.notify_users()
         
-            await self.plogging.info("Trying bot_sound")
+            await self.plogging.debug("Trying bot_sound")
             scrap = await self._scrap_check()
             sum_of_scrap = await str_to_float(scrap)
             if sum_of_scrap <= 300:
