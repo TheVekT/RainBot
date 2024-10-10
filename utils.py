@@ -198,7 +198,7 @@ class RainParser:
             
     async def edit_last_message(self, msg):
         channel = self.bot.get_channel(1084401349325762623) # замените на ID вашего канала
-        if msg.author() == self.bot.user:
+        if msg.author == self.bot.user:
             await self.plogging.debug("Editing last message...")
             self.message = await channel.fetch_message(self.last_message)
             embed = disnake.Embed(
