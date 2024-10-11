@@ -33,6 +33,7 @@ class RainParser:
         self.rain_start = Signal()
         self.rain_end = Signal()
         self.plogging = Plogging()
+        self.bot = None
         
         self.enable_options()
 
