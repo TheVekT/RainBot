@@ -9,7 +9,7 @@ from plogging import Plogging
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from disnake.ext import commands
+from disnake.ext import commands, tasks
 from bs4 import BeautifulSoup
 
 class Signal:
@@ -55,6 +55,7 @@ class RainParser:
         self.options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
         self.options.add_argument('accept-language=en-US,en;q=0.9')
         self.options.add_argument("--window-position=-2000,0")
+        self.options.add_argument('--headless=new')
         # Отключение изображений
         self.prefs = {
             "profile.managed_default_content_settings.images": 2,  # Отключение изображений
@@ -81,6 +82,7 @@ class RainParser:
             
         async def terminate_process_tree(pid):
             try:
+                await self.driver_quit()
                 process = psutil.Process(pid)
                 children = process.children(recursive=True)
                 for child in children:
@@ -97,7 +99,6 @@ class RainParser:
         for proc in chrome_processes:
             await terminate_process_tree(proc.info['pid'])
         await asyncio.sleep(2)  # Небольшая задержка для освобождения ресурсов
-
 
     async def restart_browser(self):
         """
@@ -131,23 +132,27 @@ class RainParser:
                     
     async def _get_event_data(self):
         if self.driver is not None:
-            # получение HTML-кода страницы после выполнения JavaScript
-            html = self.driver.execute_script("return document.documentElement.outerHTML")
-            self.soup = BeautifulSoup(html, 'html.parser')
+            try:
+                # получение HTML-кода страницы после выполнения JavaScript
+                html = self.driver.page_source
+                self.soup = BeautifulSoup(html, 'html.parser')
 
-            # поиск нужной информации на странице
-            event_div = self.soup.find('div', {'class': 'px-4 chat-rain-outer mb-2'})
-            time_now = datetime.datetime.now()
-            formatted_time = time_now.strftime("%H:%M:%S")
-            await self.plogging.debug(str(event_div))
+                # поиск нужной информации на странице
+                event_div = self.soup.find('div', {'class': 'px-4 chat-rain-outer mb-2'})
+                time_now = datetime.datetime.now()
+                formatted_time = time_now.strftime("%H:%M:%S")
+                await self.plogging.debug(str(event_div))
 
-            if event_div is not None:
-                    
-                event_data = event_div.text
-                await self.plogging.debug(event_data) # вывод содержимого переменной event_data в консоль
-            else:
-                event_data = None
-            return event_data
+                if event_div is not None:
+                        
+                    event_data = event_div.text
+                    await self.plogging.debug(event_data) # вывод содержимого переменной event_data в консоль
+                else:
+                    event_data = None
+                return event_data
+            except Exception as e:
+                await self.plogging.error(f"Error fetching page source: {e}")
+                await self.driver_quit()
         else:
             return 'Empty'
             
@@ -163,7 +168,7 @@ class RainParser:
             if match:
                 global number
                 number = match.group(1)
-                await self.plogging.info("Number founded! " + str(number))
+                await self.plogging.debug("Number founded! " + str(number))
                 return number
         else:
             return None
