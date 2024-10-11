@@ -42,14 +42,15 @@ async def on_ready():
 
     sound = PlaySoundOnBot(bot)
     rain = RainParser()
-    rain.connect_bot(bot)
-
+    if rain.bot is None:
+        rain.connect_bot(bot)
     server = WebSocketServer()
-    server.run()
-
-    searching_rain.start()
-    restarting_browser.start()
-
+    if not server.is_connected:
+        server.run()
+    if not searching_rain.is_running():
+        searching_rain.start()
+    if not restarting_browser.is_running():
+        restarting_browser.start()
 
     await plogging.info('Bot is ready!')
 
