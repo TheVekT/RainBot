@@ -107,7 +107,7 @@ class RainParser:
         """
         if self.last_check_time is not None:
             elapsed_time = datetime.datetime.now() - self.last_check_time
-            if elapsed_time.total_seconds() < self.last_check_time:
+            if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
                 return
             
         await self.plogging.debug("Trying to restart browser...")
@@ -118,7 +118,7 @@ class RainParser:
                 await self.plogging.debug("Browser successfully quit.")
             except Exception as e:
                 await self.plogging.error(f"Failed to quit browser: {e}")
-            self.driver = None
+        self.driver = None
 
         await self.close_browsers()
 
@@ -154,6 +154,7 @@ class RainParser:
             except Exception as e:
                 await self.plogging.error(f"Error fetching page source: {e}")
                 await self.driver_quit()
+                await self.restart_browser()
         else:
             return 'Empty'
             
@@ -265,7 +266,7 @@ class RainParser:
                 if scrap is not None:
                     await self.plogging.debug("try to edit last message...")
                     await self.edit_last_message(self.message)
-                    asyncio.sleep(5)
+                    await asyncio.sleep(5)
                     old_scrap = scrap
                 else:
                     self.rain_end.emit()
