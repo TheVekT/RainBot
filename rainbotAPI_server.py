@@ -83,6 +83,8 @@ class WebSocketServer:
                 if message.startswith('@'):
                     if message[1:] == 'get_logs':
                         await self.send_packet(websocket=websocket, type='logs', message=self.plogging.get_history())
+                    elif message[1:] == 'get_all_logs':
+                        await self.send_packet(websocket=websocket, type='all_logs', message=)
                 elif message.startswith('/'):
                     temp = message[1:].split()
                     func_name = temp[0]

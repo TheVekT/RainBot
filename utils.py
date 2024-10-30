@@ -423,7 +423,7 @@ class PlaySoundOnBot:
                     await voice.disconnect()
         except Exception as e:
             await self.plogging.error(f"Error in bot_sound: {e}")
-    async def play_audio(self, path_to_file, time_sleep, voice):
+    async def play_audio(self, path_to_file, time_sleep, voice, volume=0.6):
         """
         Параметры:
         - path_to_file (str): Путь к аудиофайлу в папке 'sounds'.
@@ -450,7 +450,7 @@ class PlaySoundOnBot:
         audio_source = disnake.FFmpegPCMAudio(audio_path)
         # Обертываем аудиоисточник для установки громкости
         audio_source = disnake.PCMVolumeTransformer(audio_source)
-        audio_source.volume = 0.6
+        audio_source.volume = volume
         
         # Воспроизводим аудиоисточник в голосовом канале
         voice.play(audio_source)

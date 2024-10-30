@@ -5,6 +5,7 @@ from rainbotAPI_server import WebSocketServer
 from disnake.ext import commands, tasks
 from disnake import app_commands
 from plogging import Plogging
+from stats import StatisticsTracker
 from utils import PlaySoundOnBot, RainParser, ConfigManager
 
 
@@ -16,14 +17,19 @@ plogging.enable_logging()
 
 intents = disnake.Intents.default()
 intents.message_content = True
+intents.voice_states = True
 intents.members = True
 intents.guilds = True
+intents.presences = True
+
+
 activity = disnake.Activity(
     name="геноцид.",
-    type=disnake.ActivityType.streaming,
+    type=disnake.ActivityType.competing,
 )
 bot = commands.Bot(command_prefix="/", intents=intents, activity=activity)
 TOKEN = 'MTA4NDM4Njk3NDk2NzgxMjE2Nw.GwfT7U.Faj3m69IdGxhvWc2IHAnXFMdoTDrGdfYhIHos0'
+#TOKEN = "MTIwOTA2NTY5NzM1MTgyNzQ1Ng.G-lJgy.vNrpSNtLq7Qal42KPt88eLO4KSnfR4ee8zRVtE" #TEST BOT TOKEN
 
 @tasks.loop(seconds=10)
 async def searching_rain():
@@ -32,19 +38,23 @@ async def searching_rain():
 @tasks.loop(seconds=300)    
 async def restarting_browser():
     await rain.restart_browser()
-    
+
+
 
 @bot.event
 async def on_ready():
     global cdown, sound, rain
+    await bot.change_presence(status=disnake.Status.invisible)
     cdown = ConfigManager()
     await cdown.create_config()
-
+    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
+    await stats.compress_stats_files()
     sound = PlaySoundOnBot(bot)
     rain = RainParser()
     if rain.bot is None:
         rain.connect_bot(bot)
     server = WebSocketServer()
+
     if not server.is_connected:
         server.run()
     if not searching_rain.is_running():
@@ -54,7 +64,6 @@ async def on_ready():
 
     await plogging.info('Bot is ready!')
 
-        
     
 
 
@@ -133,7 +142,6 @@ async def shlepki(ctx):
 async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member):
     try:
         await ctx.response.defer(ephemeral=True)
-        
         await plogging.info(f"Command   'moving'   was used by   {ctx.author.display_name}\nTry to moving {member.display_name}")
         # Проверяем, присоединен ли участник к голосовому каналу
         if ctx.author.voice is None or ctx.author.voice.channel is None:
@@ -352,7 +360,7 @@ async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.M
     
     
 @bot.slash_command(name="test", description="test command.")
-async def test(ctx):
+async def test(ctx: disnake.ApplicationCommandInteraction):
 
     await plogging.info(f"Command 'test' was used by {ctx.author.display_name}")
 
@@ -381,7 +389,6 @@ async def test(ctx):
     )
     await ctx.followup.send(embed=embed)  
     
-
 
 
 

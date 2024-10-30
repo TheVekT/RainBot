@@ -1,6 +1,5 @@
-RainStart.bat
-RAINstart.lnk
 logs/
 stats/
-RainBotAPI.py
 __pycache__/
+sounds/1/
+test_bot.py
