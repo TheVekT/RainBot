@@ -11,21 +11,22 @@ class WebSocketServer:
         self.host = host
         self.port = port
         self.server = None
-        self.current_websocket = None
-        self.is_connected = False
         self.on_connect_callback = None
         self.on_disconnect_callback = None
+
+        # Dictionary to keep track of connected clients
+        self.clients = {}  # {websocket: {'address': (ip, port), 'connection_type': str}}
 
         # Dictionary of registered functions
         self.registered_functions = {
             'print': print,
-            'plogging': self.plogging.info,  
+            'plogging': self.plogging.info,
             # Add more functions as needed
         }
+
     def _send_new_log_message(self):
-        if self.is_connected:
-            new_message = self.plogging.get_last_log_message()
-            asyncio.create_task(self.send_packet(self.current_websocket, 'new_log_message', new_message))
+        new_message = self.plogging.get_last_log_message()
+        asyncio.create_task(self.broadcast_packet('new_log_message', new_message, 'gui_client'))
 
     def on_connect(self, callback):
         """Register a callback for when a client connects."""
@@ -68,23 +69,70 @@ class WebSocketServer:
             except Exception as e:
                 await self.plogging.error(f"Error sending message: {e}")
 
-    async def handler(self, websocket, path):
-        self.current_websocket = websocket
-        self.is_connected = True
-        await self.plogging.info(f"New connection: {websocket.remote_address}")
+    async def broadcast_packet(self, type, message, client_type=None):
+        """Send a packet to all connected clients, optionally filtering by client type."""
+        response = {
+            "type": type,
+            "message": message
+        }
+        disconnected_clients = []
+        for ws, info in self.clients.items():
+            if client_type is None or info['connection_type'] == client_type:
+                try:
+                    await ws.send(json.dumps(response))
+                except Exception as e:
+                    await self.plogging.error(f"Error sending message to {info['address']}: {e}")
+                    disconnected_clients.append(ws)
+        # Remove disconnected clients
+        for ws in disconnected_clients:
+            await self.remove_client(ws)
 
-        # Trigger on_connect signal
-        if self.on_connect_callback:
-            self.on_connect_callback(websocket.remote_address)
+    async def remove_client(self, websocket):
+        info = self.clients.pop(websocket, None)
+        if info:
+            await self.plogging.info(f"Client {info['address']} disconnected.")
+            if self.on_disconnect_callback:
+                self.on_disconnect_callback(info['address'])
+            try:
+                await websocket.close()
+            except:
+                pass
+
+    async def handler(self, websocket, path):
+        # Get client address
+        client_address = websocket.remote_address
+        await self.plogging.info(f"New connection: {client_address}")
+
+        # Receive initial message from client indicating connection type
+        try:
+            initial_message = await websocket.recv()
+            data = json.loads(initial_message)
+            connection_type = data.get('connection-type')
+            if not connection_type:
+                await self.plogging.warn(f"Client {client_address} did not send connection type.")
+                await websocket.close()
+                return
+            # Store client info
+            self.clients[websocket] = {
+                'address': client_address,
+                'connection_type': connection_type
+            }
+            # Trigger on_connect signal
+            if self.on_connect_callback:
+                self.on_connect_callback(client_address)
+        except Exception as e:
+            await self.plogging.error(f"Error during initial handshake with {client_address}: {e}")
+            await websocket.close()
+            return
 
         try:
             async for message in websocket:
-                await self.plogging.debug(f"Message received from {websocket.remote_address}: {message}")
+                await self.plogging.debug(f"Message received from {client_address}: {message}")
                 if message.startswith('@'):
                     if message[1:] == 'get_logs':
                         await self.send_packet(websocket=websocket, type='logs', message=self.plogging.get_history())
                     elif message[1:] == 'get_all_logs':
-                        await self.send_packet(websocket=websocket, type='all_logs', message=)
+                        pass  # Implement as needed
                 elif message.startswith('/'):
                     temp = message[1:].split()
                     func_name = temp[0]
@@ -95,17 +143,11 @@ class WebSocketServer:
                     response = {"type": "error", "message": "Error: Command should start with '/' or '@'."}
                     await websocket.send(json.dumps(response))
         except websockets.exceptions.ConnectionClosed as e:
-            await self.plogging.warn(f"Connection closed: {websocket.remote_address}, reason: {e.code} - {e.reason}")
+            await self.plogging.warn(f"Connection closed: {client_address}, reason: {e.code} - {e.reason}")
         except Exception as e:
-            await self.plogging.error(f"Error with {websocket.remote_address}: {e}")
+            await self.plogging.error(f"Error with {client_address}: {e}")
         finally:
-            self.is_connected = False
-            self.current_websocket = None
-            await self.plogging.info(f"Client {websocket.remote_address} disconnected. Waiting for new connections.")
-
-            # Trigger on_disconnect signal
-            if self.on_disconnect_callback:
-                self.on_disconnect_callback(websocket.remote_address)
+            await self.remove_client(websocket)
 
     async def start(self):
         while True:

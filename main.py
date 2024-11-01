@@ -55,8 +55,8 @@ async def on_ready():
         rain.connect_bot(bot)
     server = WebSocketServer()
 
-    if not server.is_connected:
-        server.run()
+
+    server.run()
     if not searching_rain.is_running():
         searching_rain.start()
     if not restarting_browser.is_running():
