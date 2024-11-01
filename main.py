@@ -47,8 +47,7 @@ async def on_ready():
     await bot.change_presence(status=disnake.Status.invisible)
     cdown = ConfigManager()
     await cdown.create_config()
-    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
-    await stats.compress_stats_files()
+    #stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
     sound = PlaySoundOnBot(bot)
     rain = RainParser()
     if rain.bot is None:

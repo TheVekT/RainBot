@@ -16,11 +16,14 @@ class WebSocketServer:
 
         # Dictionary to keep track of connected clients
         self.clients = {}  # {websocket: {'address': (ip, port), 'connection_type': str}}
-
+        self.register_funcs()
+    def register_funcs(self):
         # Dictionary of registered functions
+        from utils import shlepay
         self.registered_functions = {
             'print': print,
             'plogging': self.plogging.info,
+            'shlepay': shlepay
             # Add more functions as needed
         }
 
@@ -51,7 +54,9 @@ class WebSocketServer:
 
         try:
             if inspect.iscoroutinefunction(func):
-                result = await func(*processed_args)
+                # Execute the asynchronous function using asyncio.create_task
+                task = asyncio.create_task(func(*processed_args))
+                result = await task  # Await the task to get the result
             else:
                 result = func(*processed_args)
             return {"type": "response", "message": "Function executed successfully.", "result": result}
