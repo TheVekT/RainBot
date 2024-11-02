@@ -406,7 +406,7 @@ async def shlepay(channel = None):
         channel = channel_ids[int(channel)]
     else: 
         channel = None
-    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72, channel)))
+    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72), channel_id=channel))
 
 
 

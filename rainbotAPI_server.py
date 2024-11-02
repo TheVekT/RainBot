@@ -19,7 +19,7 @@ class WebSocketServer:
         self.register_funcs()
     def register_funcs(self):
         # Dictionary of registered functions
-        from utils import shlepay
+        from main import shlepay
         self.registered_functions = {
             'print': print,
             'plogging': self.plogging.info,
