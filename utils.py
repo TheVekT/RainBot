@@ -499,20 +499,3 @@ async def format_duration(seconds):
 
 
 
-async def shlepay(channel = None):
-    plogging = Plogging()
-    await plogging.info(f"Command 'shlepki' from gui client")
-    
-    channel_ids = {
-        1: 880834956362932314,
-        2: 901174980673425408,
-        3: 1168637791278739497
-    }
-    if int(channel) in channel_ids.keys():
-        channel = channel_ids[int(channel)]
-    else: 
-        channel = None
-    from main import bot as _bt
-    bot = _bt
-    sound = PlaySoundOnBot(botObject=bot)
-    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72, channel)))
