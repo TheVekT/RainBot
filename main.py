@@ -1,12 +1,15 @@
 import disnake
 import datetime
 import asyncio
+
+import disnake.context_managers
 from rainbotAPI_server import WebSocketServer
 from disnake.ext import commands, tasks
 from disnake import app_commands
 from plogging import Plogging
 from stats import StatisticsTracker
 from utils import PlaySoundOnBot, RainParser, ConfigManager
+from telegram_bot import TelegramBot
 
 
 
@@ -28,8 +31,8 @@ activity = disnake.Activity(
     type=disnake.ActivityType.competing,
 )
 bot = commands.Bot(command_prefix="/", intents=intents, activity=activity)
-TOKEN = 'MTA4NDM4Njk3NDk2NzgxMjE2Nw.GwfT7U.Faj3m69IdGxhvWc2IHAnXFMdoTDrGdfYhIHos0'
-#TOKEN = "MTIwOTA2NTY5NzM1MTgyNzQ1Ng.G-lJgy.vNrpSNtLq7Qal42KPt88eLO4KSnfR4ee8zRVtE" #TEST BOT TOKEN
+#TOKEN = 'MTA4NDM4Njk3NDk2NzgxMjE2Nw.GwfT7U.Faj3m69IdGxhvWc2IHAnXFMdoTDrGdfYhIHos0'
+TOKEN = "MTIwOTA2NTY5NzM1MTgyNzQ1Ng.G-lJgy.vNrpSNtLq7Qal42KPt88eLO4KSnfR4ee8zRVtE" #TEST BOT TOKEN
 
 @tasks.loop(seconds=10)
 async def searching_rain():
@@ -44,7 +47,6 @@ async def restarting_browser():
 @bot.event
 async def on_ready():
     global cdown, sound, rain
-    await bot.change_presence(status=disnake.Status.invisible)
     cdown = ConfigManager()
     await cdown.create_config()
     #stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
@@ -52,8 +54,10 @@ async def on_ready():
     rain = RainParser()
     if rain.bot is None:
         rain.connect_bot(bot)
-    server = WebSocketServer()
+    server = WebSocketServer(host='192.168.0.106')
 
+    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain)
+    await teleg_bot.start_polling()
 
     server.run()
     if not searching_rain.is_running():
@@ -61,9 +65,9 @@ async def on_ready():
     if not restarting_browser.is_running():
         restarting_browser.start()
 
+
     await plogging.info('Bot is ready!')
 
-    
 
 
     
@@ -394,7 +398,7 @@ async def test(ctx: disnake.ApplicationCommandInteraction):
 
 
 async def shlepay(channel = None):
-    plogging = Plogging()
+
     await plogging.info(f"Command 'shlepki' from gui client")
     
     channel_ids = {
