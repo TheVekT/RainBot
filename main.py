@@ -31,8 +31,8 @@ activity = disnake.Activity(
     type=disnake.ActivityType.competing,
 )
 bot = commands.Bot(command_prefix="/", intents=intents, activity=activity)
-#TOKEN = 'MTA4NDM4Njk3NDk2NzgxMjE2Nw.GwfT7U.Faj3m69IdGxhvWc2IHAnXFMdoTDrGdfYhIHos0'
-TOKEN = "MTIwOTA2NTY5NzM1MTgyNzQ1Ng.G-lJgy.vNrpSNtLq7Qal42KPt88eLO4KSnfR4ee8zRVtE" #TEST BOT TOKEN
+TOKEN = 'MTA4NDM4Njk3NDk2NzgxMjE2Nw.GwfT7U.Faj3m69IdGxhvWc2IHAnXFMdoTDrGdfYhIHos0'
+#TOKEN = "MTIwOTA2NTY5NzM1MTgyNzQ1Ng.G-lJgy.vNrpSNtLq7Qal42KPt88eLO4KSnfR4ee8zRVtE" #TEST BOT TOKEN
 
 @tasks.loop(seconds=10)
 async def searching_rain():

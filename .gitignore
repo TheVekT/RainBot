@@ -4,4 +4,5 @@ __pycache__/
 sounds/1/
 test_bot.py
 RAINstart.lnk
+RainStart.bat
 telegram-users.db
