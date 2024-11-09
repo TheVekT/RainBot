@@ -245,7 +245,7 @@ class RainParser:
         
             await self.plogging.debug("Trying bot_sound")
             scrap = await self._scrap_check()
-            self.rain_scrap.emit(str_to_float(scrap))
+            self.rain_scrap.emit(await str_to_float(scrap))
             sum_of_scrap = await str_to_float(scrap)
             if sum_of_scrap <= 300:
                 await self.sound.bot_sound(self.sound.play_audio, *("sound.wav", 3.5))
@@ -256,7 +256,7 @@ class RainParser:
             old_scrap = scrap
             while True:
                 scrap = await self._scrap_check()
-                self.rain_scrap.emit(str_to_float(scrap))
+                self.rain_scrap.emit(await str_to_float(scrap))
                 if await str_to_float(scrap) is not None and await str_to_float(old_scrap) is not None:
                     recent_scrap = await str_to_float(scrap) - await str_to_float(old_scrap)
                 if old_scrap is not None and recent_scrap >= 250:
