@@ -245,28 +245,42 @@ class RainParser:
         
             await self.plogging.debug("Trying bot_sound")
             scrap = await self._scrap_check()
-            self.rain_scrap.emit(await str_to_float(scrap))
+            
             sum_of_scrap = await str_to_float(scrap)
-            if sum_of_scrap <= 300:
-                await self.sound.bot_sound(self.sound.play_audio, *("sound.wav", 3.5))
-            elif sum_of_scrap >= 1000:
-                await self.sound.bot_sound(self.sound.play_audio, *("gimn.mp3", 19))
-            else:
-                await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 12))
+            self.rain_scrap.emit(sum_of_scrap)
+            if sum_of_scrap < 150:
+                await self.sound.bot_sound(self.sound.play_audio, *("sound.wav", 3.5, 0.6))
+            elif sum_of_scrap < 400:
+                await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
+            elif sum_of_scrap < 600:
+                await self.sound.bot_sound(self.sound.play_audio, *("stony.mp3", 7, 0.9))
+            elif sum_of_scrap < 1000:
+                await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 12, 0.6))
+            elif sum_of_scrap < 5000:
+                await self.sound.bot_sound(self.sound.play_audio, *("gimn.mp3", 19, 0.6))
+            else: 
+                await self.sound.bot_sound(self.sound.play_audio, *("5000.mp3", 12, 3))
             old_scrap = scrap
             while True:
                 scrap = await self._scrap_check()
-                self.rain_scrap.emit(await str_to_float(scrap))
+                
                 if await str_to_float(scrap) is not None and await str_to_float(old_scrap) is not None:
                     recent_scrap = await str_to_float(scrap) - await str_to_float(old_scrap)
-                if old_scrap is not None and recent_scrap >= 250:
                     await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
-                    await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 8))
+                else:
+                    recent_scrap = 0
+                    
+                if old_scrap is not None and recent_scrap >= 400:
+                    await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 8, 0.6))
+                elif old_scrap is not None and recent_scrap >= 200:
+                    await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
+                elif old_scrap is not None and recent_scrap >= 100:
+                    await self.sound.bot_sound(self.sound.play_audio, *("potyzhno.mp3", 2, 1.5))
                 elif old_scrap is not None and recent_scrap >= 50:
-                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
                     await self.sound.bot_sound()
                 
                 if scrap is not None:
+                    self.rain_scrap.emit(await str_to_float(scrap))
                     await self.plogging.debug("try to edit last message...")
                     await self.edit_last_message(self.message)
                     await asyncio.sleep(5)
@@ -426,7 +440,7 @@ class PlaySoundOnBot:
                     await voice.disconnect()
         except Exception as e:
             await self.plogging.error(f"Error in bot_sound: {e}")
-    async def play_audio(self, path_to_file, time_sleep, voice, volume=0.6):
+    async def play_audio(self, path_to_file, time_sleep, volume, voice):
         """
         Параметры:
         - path_to_file (str): Путь к аудиофайлу в папке 'sounds'.

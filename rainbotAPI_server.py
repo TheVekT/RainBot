@@ -17,13 +17,15 @@ class WebSocketServer:
         # Dictionary to keep track of connected clients
         self.clients = {}  # {websocket: {'address': (ip, port), 'connection_type': str}}
         self.register_funcs()
+        
     def register_funcs(self):
         # Dictionary of registered functions
-        from main import shlepay
+        from main import shlepay, nalivai
         self.registered_functions = {
             'print': print,
             'plogging': self.plogging.info,
-            'shlepay': shlepay
+            'shlepay': shlepay,
+            'nalivai': nalivai
             # Add more functions as needed
         }
 

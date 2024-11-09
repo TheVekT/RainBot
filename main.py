@@ -130,7 +130,7 @@ async def shlepki(ctx):
     shlepki.last_use_time[user_id] = datetime.datetime.now()
 
     # Запускаем воспроизведение звука асинхронно
-    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72), channel_id=channel_id))
+    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72, 0.6), channel_id=channel_id))
     embed = disnake.Embed(
         description="Playing sound.",
         colour=0xF0C43F,
@@ -411,8 +411,22 @@ async def shlepay(channel = None):
         channel = channel_ids[int(channel)]
     else: 
         channel = None
-    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72), channel_id=channel))
+    asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72, 0.6), channel_id=channel))
 
+async def nalivai(channel = None):
+
+    await plogging.info(f"Command 'shlepki' from gui client")
+    
+    channel_ids = {
+        1: 880834956362932314,
+        2: 901174980673425408,
+        3: 1168637791278739497
+    }
+    if int(channel) in channel_ids.keys():
+        channel = channel_ids[int(channel)]
+    else: 
+        channel = None
+    await sound.bot_sound(sound.play_audio, *("sound.wav", 3.5, 0.6))
 
 
 
