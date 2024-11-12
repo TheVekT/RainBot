@@ -34,8 +34,8 @@ class StatisticsTracker:
             self.periodic_stats_update.start()
             self.clean_old_stats.start()
             self.compress_stats_files.start()
-
-    def get_member_state(self, member):
+    
+    def get_member_state(member):
         """Determine the current state of a member."""
         if member.status is disnake.Status.offline:
             return "offline"

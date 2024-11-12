@@ -261,30 +261,39 @@ class RainParser:
             else: 
                 await self.sound.bot_sound(self.sound.play_audio, *("5000.mp3", 12, 3))
             old_scrap = scrap
+            await asyncio.sleep(1)
             while True:
                 scrap = await self._scrap_check()
                 
                 if await str_to_float(scrap) is not None and await str_to_float(old_scrap) is not None:
                     recent_scrap = await str_to_float(scrap) - await str_to_float(old_scrap)
-                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                    
                 else:
                     recent_scrap = 0
                     
                 if old_scrap is not None and recent_scrap >= 400:
                     await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 8, 0.6))
+                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                    old_scrap = scrap
                 elif old_scrap is not None and recent_scrap >= 200:
                     await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
+                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                    old_scrap = scrap
                 elif old_scrap is not None and recent_scrap >= 100:
                     await self.sound.bot_sound(self.sound.play_audio, *("potyzhno.mp3", 2, 1.5))
+                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                    old_scrap = scrap
                 elif old_scrap is not None and recent_scrap >= 50:
                     await self.sound.bot_sound()
-                
+                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                    old_scrap = scrap
+                    
                 if scrap is not None:
                     self.rain_scrap.emit(await str_to_float(scrap))
                     await self.plogging.debug("try to edit last message...")
                     await self.edit_last_message(self.message)
                     await asyncio.sleep(5)
-                    old_scrap = scrap
+                    
                 else:
                     self.rain_end.emit()
                     break
