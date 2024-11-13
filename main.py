@@ -56,7 +56,8 @@ async def on_ready():
         rain.connect_bot(bot)
     server = WebSocketServer(host='192.168.0.106')
 
-    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain, stats)
+    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain)
+    teleg_bot.connect_discord_module(stats)
     await teleg_bot.start_polling()
 
     server.register_funcs({
