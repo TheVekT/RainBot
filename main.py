@@ -434,7 +434,7 @@ async def nalivai(channel = None):
         channel = channel_ids[channel]
     else: 
         channel = None
-    await sound.bot_sound(sound.play_audio, *("sound.wav", 3.5, 0.6))
+    await sound.bot_sound(sound.play_audio, *("sound.wav", 3.5, 0.6), channel_id=channel)
 
 
 
@@ -459,9 +459,13 @@ async def restart():
     await rain.driver_quit()
     await rain.close_browsers()
     if searching_rain.is_running():
-        searching_rain.restart()
+        searching_rain.cancel()
+        await asyncio.sleep(1)
+        searching_rain.start()
     if restarting_browser.is_running():
-        restarting_browser.restart()
+        restarting_browser.cancel()
+        await asyncio.sleep(1)
+        restarting_browser.start()
 
     
 

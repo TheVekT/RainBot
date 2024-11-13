@@ -209,21 +209,25 @@ class RainParser:
         if msg.author == self.bot.user:
             await self.plogging.debug("Editing last message...")
             self.message = await channel.fetch_message(self.last_message)
-            embed = disnake.Embed(
-                title="🌧  Rakeback Rain NOW!!!  🌧",
-                description=f"**$ {number}**",
-                colour=0xF0C43F,
-                timestamp=datetime.datetime.now(),
-            )
-            embed.set_author(
-                name="RainBot ",
-                url="",
-                icon_url="https://cdn.discordapp.com/app-icons/1084386974967812167/4f9cd1faa1a333514fd3dc7446ed5777.png?size=32",
-            )
-            embed.set_footer(
-                text="bandit.camp",
-            )
-            await self.message.edit(content="||@everyone||", embed=embed)
+            if self.message:
+                try:
+                    embed = disnake.Embed(
+                        title="🌧  Rakeback Rain NOW!!!  🌧",
+                        description=f"**$ {number}**",
+                        colour=0xF0C43F,
+                        timestamp=datetime.datetime.now(),
+                    )
+                    embed.set_author(
+                        name="RainBot ",
+                        url="",
+                        icon_url="https://cdn.discordapp.com/app-icons/1084386974967812167/4f9cd1faa1a333514fd3dc7446ed5777.png?size=32",
+                    )
+                    embed.set_footer(
+                        text="bandit.camp",
+                    )
+                    await self.message.edit(content="||@everyone||", embed=embed)
+                except Exception as e:
+                    await self.plogging.error(e)
 
 
     async def check_event(self):
@@ -449,7 +453,7 @@ class PlaySoundOnBot:
                     await voice.disconnect()
         except Exception as e:
             await self.plogging.error(f"Error in bot_sound: {e}")
-    async def play_audio(self, path_to_file, time_sleep, volume, voice):
+    async def play_audio(self, path_to_file, time_sleep, volume, voice: disnake.VoiceClient):
         """
         Параметры:
         - path_to_file (str): Путь к аудиофайлу в папке 'sounds'.
@@ -480,7 +484,9 @@ class PlaySoundOnBot:
         
         # Воспроизводим аудиоисточник в голосовом канале
         voice.play(audio_source)
-        await asyncio.sleep(time_sleep)   
+        await asyncio.sleep(time_sleep)
+        voice.stop()
+        
 
 #############
 # Functions #
