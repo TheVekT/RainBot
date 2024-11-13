@@ -3,6 +3,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQuer
 import sqlite3
 import asyncio
 from plogging import Plogging
+from stats import get_member_state
 
 # Define states for the conversation
 SET_THRESHOLD, GET_THRESHOLD, GET_DISCORD_NICK = range(3)
@@ -20,6 +21,9 @@ class TelegramBot:
         self.active_events = {}  # Stores active user messages
         self.set_commands()
         self.plogging = Plogging()
+        
+    def connect_discord_module(self, module):
+        self.discord = module
     
     def init_connectors(self):
         self.rain.rain_start.connect(self.on_rain_start)
@@ -174,23 +178,36 @@ class TelegramBot:
         
     async def on_rain_scrap(self, num):
         """Handles the event of receiving a number during the rain."""
-        self.cursor.execute("SELECT user_id, threshold FROM users")
+        self.cursor.execute("SELECT user_id, threshold, discord_account FROM users")
         users = self.cursor.fetchall()
 
-        for user_id, threshold in users:
+        for user_id, threshold, discord_account in users:
             if num >= threshold:
+
+                # Check if discord_account is not None or empty
+                if discord_account:
+                    # Try to find the Discord user
+                    member = await self.discord.find_user(discord_account)
+                    if member is not None:
+                        state = get_member_state(member)
+                        # If state is in specified states, skip this user
+                        if state in ('voice_mute', 'voice_online'):
+                            continue  # Skip sending message to this user
+
+
+                # Proceed to send/update the Telegram message
                 if user_id not in self.active_events:
                     # Send the first message to the user
                     message = await self.application.bot.send_message(
                         chat_id=user_id,
-                        text=f"{'🌧️ Rakeback Rain NOW!!!'} 🌧️\nᅠ ᅠ \n  $  {num:.2f}"
+                        text=f"🌧️ Rakeback Rain NOW!!! 🌧️\n\n$ {num:.2f}"
                     )
                     self.active_events[user_id] = message
                 else:
                     # Update the message
                     message = self.active_events[user_id]
-                    await message.edit_text(f"🌧️ Rakeback Rain NOW!!! 🌧️\nᅠ ᅠ \n  $  {num:.2f}")
-
+                    await message.edit_text(f"🌧️ Rakeback Rain NOW!!! 🌧️\n\n$ {num:.2f}")
+                    
     async def start_polling(self):
         """Asynchronously starts the bot in polling mode."""
         await self.application.initialize()  # Initialize the application

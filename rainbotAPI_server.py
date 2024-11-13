@@ -13,21 +13,14 @@ class WebSocketServer:
         self.server = None
         self.on_connect_callback = None
         self.on_disconnect_callback = None
-
+        self.registered_functions = None
         # Dictionary to keep track of connected clients
         self.clients = {}  # {websocket: {'address': (ip, port), 'connection_type': str}}
-        self.register_funcs()
+
         
-    def register_funcs(self):
-        # Dictionary of registered functions
-        from main import shlepay, nalivai
-        self.registered_functions = {
-            'print': print,
-            'plogging': self.plogging.info,
-            'shlepay': shlepay,
-            'nalivai': nalivai
-            # Add more functions as needed
-        }
+    def register_funcs(self, registred_functions: dict):
+        self.registered_functions = registred_functions
+
 
     def _send_new_log_message(self):
         new_message = self.plogging.get_last_log_message()
@@ -42,7 +35,10 @@ class WebSocketServer:
         self.on_disconnect_callback = callback
 
     async def execute_func(self, func_name, arguments):
-        func = self.registered_functions.get(func_name)
+        if self.register_funcs is not None:
+            func = self.registered_functions.get(func_name)
+        else:
+            return
         if not func:
             return {"type": "error", "message": f"Error: Function '{func_name}' is not registered."}
 
@@ -56,9 +52,8 @@ class WebSocketServer:
 
         try:
             if inspect.iscoroutinefunction(func):
-                # Execute the asynchronous function using asyncio.create_task
-                task = asyncio.create_task(func(*processed_args))
-                result = await task  # Await the task to get the result
+                # Directly await the coroutine
+                result = await func(*processed_args)
             else:
                 result = func(*processed_args)
             return {"type": "response", "message": "Function executed successfully.", "result": result}

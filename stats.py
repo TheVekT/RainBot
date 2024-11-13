@@ -35,29 +35,11 @@ class StatisticsTracker:
             self.clean_old_stats.start()
             self.compress_stats_files.start()
     
-    def get_member_state(member):
-        """Determine the current state of a member."""
-        if member.status is disnake.Status.offline:
-            return "offline"
-        elif member.voice:
-            if member.voice.self_deaf:
-                return "voice_deaf"
-            elif member.voice.self_mute:
-                return "voice_mute"
-            elif member.voice.channel == member.guild.afk_channel:
-                return "voice_afk"
-            elif len(member.voice.channel.members) == 1:
-                return "voice_alone"
-            else:
-                return "voice_online"
-        else:
-            # Member is online but not in voice
-            return "online"
 
     async def update_user_state(self, member):
         """Update the state of a member."""
         user_id = str(member.id)
-        current_state = self.get_member_state(member)
+        current_state = get_member_state(member)
         now = datetime.now().isoformat()
         previous_state_info = self.user_states.get(user_id)
         if previous_state_info:
@@ -114,6 +96,17 @@ class StatisticsTracker:
                 json.dump(data, f)
         except Exception as e:
             asyncio.create_task(self.plogging.warn(f"Error recording state period for user {user_id}: {e}"))
+            
+    def find_member(self, nickname: str) -> disnake.member:
+        """Find discord member
+
+        Args:
+            nickname (str): nickname of finder member
+        Returns:
+            member (disnake.member): member Object
+        """
+        member = self.guild.get_member_named(nickname)
+        return member
 
     @tasks.loop(seconds=3)
     async def periodic_stats_update(self):
@@ -314,3 +307,45 @@ class StatisticsTracker:
             total_times_formatted[state] = f"{hours:.2f}h"
 
         return total_times_formatted
+    def stop(self):
+        """Properly stop the StatisticsTracker, saving any pending data and stopping tasks."""
+        now = datetime.now().isoformat()
+
+        # Record the current state periods for all users up to now
+        for user_id, state_info in self.user_states.items():
+            current_state = state_info['state']
+            start_time = state_info['start_time']
+
+            # Retrieve the member's name
+            member = self.guild.get_member(int(user_id))
+            user_name = member.name if member else 'Unknown'
+
+            # Record the state period up to the current time
+            self.record_state_period(user_id, user_name, current_state, start_time, now)
+
+        # Stop all running periodic tasks
+        self.periodic_stats_update.cancel()
+        self.clean_old_stats.cancel()
+        self.compress_stats_files.cancel()
+
+        # Optionally, clear the user_states dictionary
+        self.user_states.clear()
+        
+def get_member_state(member):
+    """Determine the current state of a member."""
+    if member.status is disnake.Status.offline:
+        return "offline"
+    elif member.voice:
+        if member.voice.self_deaf:
+            return "voice_deaf"
+        elif member.voice.self_mute:
+            return "voice_mute"
+        elif member.voice.channel == member.guild.afk_channel:
+            return "voice_afk"
+        elif len(member.voice.channel.members) == 1:
+            return "voice_alone"
+        else:
+            return "voice_online"
+    else:
+        # Member is online but not in voice
+        return "online"

@@ -46,19 +46,26 @@ async def restarting_browser():
 
 @bot.event
 async def on_ready():
-    global cdown, sound, rain
+    global cdown, sound, rain, stats
     cdown = ConfigManager()
     await cdown.create_config()
-    #stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
+    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
     sound = PlaySoundOnBot(bot)
     rain = RainParser()
     if rain.bot is None:
         rain.connect_bot(bot)
     server = WebSocketServer(host='192.168.0.106')
 
-    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain)
+    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain, stats)
     await teleg_bot.start_polling()
 
+    server.register_funcs({
+            'stop': stop,
+            'plogging': plogging.info,
+            'restart': restart,
+            'shlepay': shlepay,
+            'nalivai': nalivai
+        })
     server.run()
     if not searching_rain.is_running():
         searching_rain.start()
@@ -407,8 +414,8 @@ async def shlepay(channel = None):
         2: 901174980673425408,
         3: 1168637791278739497
     }
-    if int(channel) in channel_ids.keys():
-        channel = channel_ids[int(channel)]
+    if channel in channel_ids.keys():
+        channel = channel_ids[channel]
     else: 
         channel = None
     asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72, 0.6), channel_id=channel))
@@ -422,8 +429,8 @@ async def nalivai(channel = None):
         2: 901174980673425408,
         3: 1168637791278739497
     }
-    if int(channel) in channel_ids.keys():
-        channel = channel_ids[int(channel)]
+    if channel in channel_ids.keys():
+        channel = channel_ids[channel]
     else: 
         channel = None
     await sound.bot_sound(sound.play_audio, *("sound.wav", 3.5, 0.6))
@@ -434,6 +441,28 @@ async def nalivai(channel = None):
 
 
 
+async def stop():
+    plogging.info('Stopping main script...')
+    if searching_rain.is_running():
+        searching_rain.cancel()
+    if restarting_browser.is_running():
+        restarting_browser.cancel()
+    await rain.driver_quit()
+    await rain.close_browsers()
+    await bot.close()
+    plogging.archive_logs()
+    stats.stop()
+    
+async def restart():
+    plogging.info('RESTARTING main script...')
+    await rain.driver_quit()
+    await rain.close_browsers()
+    if searching_rain.is_running():
+        searching_rain.restart()
+    if restarting_browser.is_running():
+        restarting_browser.restart()
+
+    
 
 
 
