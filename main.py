@@ -443,7 +443,7 @@ async def nalivai(channel = None):
 
 
 async def stop():
-    plogging.info('Stopping main script...')
+    await plogging.info('Stopping main script...')
     if searching_rain.is_running():
         searching_rain.cancel()
     if restarting_browser.is_running():
@@ -455,7 +455,7 @@ async def stop():
     stats.stop()
     
 async def restart():
-    plogging.info('RESTARTING main script...')
+    await plogging.info('RESTARTING main script...')
     await rain.driver_quit()
     await rain.close_browsers()
     if searching_rain.is_running():

@@ -1,4 +1,4 @@
-from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, error
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
 import sqlite3
 import asyncio
@@ -206,7 +206,10 @@ class TelegramBot:
                 else:
                     # Update the message
                     message = self.active_events[user_id]
-                    await message.edit_text(f"🌧️ Rakeback Rain NOW!!! 🌧️\n\n$ {num:.2f}")
+                    try:
+                        await message.edit_text(f"🌧️ Rakeback Rain NOW!!! 🌧️\n\n$ {num:.2f}")
+                    except error.BadRequest:
+                        pass
                     
     async def start_polling(self):
         """Asynchronously starts the bot in polling mode."""
