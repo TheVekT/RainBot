@@ -257,7 +257,7 @@ class RainParser:
             elif sum_of_scrap < 400:
                 await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
             elif sum_of_scrap < 600:
-                await self.sound.bot_sound(self.sound.play_audio, *("stony.mp3", 7, 0.9))
+                await self.sound.bot_sound(self.sound.play_audio, *("stony.mp3", 7, 1.3))
             elif sum_of_scrap < 1000:
                 await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 12, 0.6))
             elif sum_of_scrap < 5000:

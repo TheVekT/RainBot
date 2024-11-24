@@ -404,34 +404,29 @@ async def test(ctx: disnake.ApplicationCommandInteraction):
 
 
 
-
+mine_channel_ids = { 
+    1: 880834956362932314,
+    2: 901174980673425408,
+    3: 1168637791278739497
+    }
 
 async def shlepay(channel = None):
 
     await plogging.info(f"Command 'shlepki' from gui client")
     
-    channel_ids = {
-        1: 880834956362932314,
-        2: 901174980673425408,
-        3: 1168637791278739497
-    }
-    if channel in channel_ids.keys():
-        channel = channel_ids[channel]
+
+    if channel in mine_channel_ids.keys():
+        channel = mine_channel_ids[channel]
     else: 
         channel = None
     asyncio.create_task(sound.bot_sound(sound.play_audio, *("shlepki.mp3", 72, 0.6), channel_id=channel))
 
 async def nalivai(channel = None):
 
-    await plogging.info(f"Command 'shlepki' from gui client")
-    
-    channel_ids = {
-        1: 880834956362932314,
-        2: 901174980673425408,
-        3: 1168637791278739497
-    }
-    if channel in channel_ids.keys():
-        channel = channel_ids[channel]
+    await plogging.info(f"Command 'nalivai' from gui client")
+
+    if channel in mine_channel_ids.keys():
+        channel = mine_channel_ids[channel]
     else: 
         channel = None
     await sound.bot_sound(sound.play_audio, *("sound.wav", 3.5, 0.6), channel_id=channel)
@@ -460,11 +455,12 @@ async def restart():
     await rain.close_browsers()
     if searching_rain.is_running():
         searching_rain.cancel()
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
+        rain.last_check_time = None
         searching_rain.start()
     if restarting_browser.is_running():
         restarting_browser.cancel()
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
         restarting_browser.start()
 
     
