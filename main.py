@@ -46,7 +46,7 @@ async def restarting_browser():
 
 @bot.event
 async def on_ready():
-    global cdown, sound, rain, stats
+    global cdown, sound, rain, stats, teleg_bot
     cdown = ConfigManager()
     await cdown.create_config()
     stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
@@ -65,7 +65,8 @@ async def on_ready():
             'plogging': plogging.info,
             'restart': restart,
             'shlepay': shlepay,
-            'nalivai': nalivai
+            'nalivai': nalivai,
+            'stop_full': shutdown_stop 
         })
     server.run()
     if not searching_rain.is_running():
@@ -434,7 +435,21 @@ async def nalivai(channel = None):
 
 
 
-
+async def shutdown_stop(shutdown_delay_seconds: int = 180):
+    import os
+    minutes = shutdown_delay_seconds / 60
+    await plogging.info(f'Stopping main script with shutdown in {minutes:.1f} minutes...')
+    os.system(f"shutdown /s /t {shutdown_delay_seconds}")
+    if searching_rain.is_running():
+        searching_rain.cancel()
+    if restarting_browser.is_running():
+        restarting_browser.cancel()
+    await rain.driver_quit()
+    await rain.close_browsers()
+    await bot.close()
+    await teleg_bot.stop()
+    plogging.archive_logs()
+    stats.stop()
 
 
 async def stop():
@@ -446,6 +461,7 @@ async def stop():
     await rain.driver_quit()
     await rain.close_browsers()
     await bot.close()
+    await teleg_bot.stop()
     plogging.archive_logs()
     stats.stop()
     
@@ -453,15 +469,16 @@ async def restart():
     await plogging.info('RESTARTING main script...')
     await rain.driver_quit()
     await rain.close_browsers()
-    if searching_rain.is_running():
-        searching_rain.cancel()
-        await asyncio.sleep(2)
-        rain.last_check_time = None
-        searching_rain.start()
     if restarting_browser.is_running():
         restarting_browser.cancel()
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
         restarting_browser.start()
+    if searching_rain.is_running():
+        searching_rain.cancel()
+        await asyncio.sleep(1)
+        rain.last_check_time = None
+        searching_rain.start()
+
 
     
 

@@ -205,104 +205,109 @@ class RainParser:
             
             
     async def edit_last_message(self, msg):
-        channel = self.bot.get_channel(1084401349325762623) # замените на ID вашего канала
-        if msg.author == self.bot.user:
-            await self.plogging.debug("Editing last message...")
-            self.message = await channel.fetch_message(self.last_message)
-            if self.message:
-                try:
-                    embed = disnake.Embed(
-                        title="🌧  Rakeback Rain NOW!!!  🌧",
-                        description=f"**$ {number}**",
-                        colour=0xF0C43F,
-                        timestamp=datetime.datetime.now(),
-                    )
-                    embed.set_author(
-                        name="RainBot ",
-                        url="",
-                        icon_url="https://cdn.discordapp.com/app-icons/1084386974967812167/4f9cd1faa1a333514fd3dc7446ed5777.png?size=32",
-                    )
-                    embed.set_footer(
-                        text="bandit.camp",
-                    )
-                    await self.message.edit(content="||@everyone||", embed=embed)
-                except Exception as e:
-                    await self.plogging.error(e)
-
+        try:
+            channel = self.bot.get_channel(1084401349325762623) # замените на ID вашего канала
+            if msg.author == self.bot.user:
+                await self.plogging.debug(f"Editing last message... | message id : {self.message.id}")
+                self.message = await channel.fetch_message(self.last_message)
+                if self.message:
+                    try:
+                        embed = disnake.Embed(
+                            title="🌧  Rakeback Rain NOW!!!  🌧",
+                            description=f"**$ {number}**",
+                            colour=0xF0C43F,
+                            timestamp=datetime.datetime.now(),
+                        )
+                        embed.set_author(
+                            name="RainBot ",
+                            url="",
+                            icon_url="https://cdn.discordapp.com/app-icons/1084386974967812167/4f9cd1faa1a333514fd3dc7446ed5777.png?size=32",
+                        )
+                        embed.set_footer(
+                            text="bandit.camp",
+                        )
+                        await self.message.edit(content="||@everyone||", embed=embed)
+                    except Exception as e:
+                        await self.plogging.error(e)
+        except Exception as e:
+            await self.plogging.error(f"Unhandled exception in edit_last_message: {e}")
 
     async def check_event(self):
-        # проверяем, прошло ли уже 30 минут с момента последнего запуска функции
-        if self.last_check_time is not None:
-            elapsed_time = datetime.datetime.now() - self.last_check_time
-            if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
-                return
-        await self.plogging.debug("Checking for event")  # отладочный вывод
-        # проверяем, что на странице сайта есть информация об ивенте
-        event_data = await self._get_event_data()
-        if event_data is not None and "event" in event_data.lower():
-            self.rain_start.emit()
-            await self.plogging.info("Rain DETECTED!")
-            # если есть информация об ивенте, отправляем уведомление
+        try:
+            # проверяем, прошло ли уже 30 минут с момента последнего запуска функции
+            if self.last_check_time is not None:
+                elapsed_time = datetime.datetime.now() - self.last_check_time
+                if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
+                    return
+            await self.plogging.debug("Checking for event")  # отладочный вывод
+            # проверяем, что на странице сайта есть информация об ивенте
+            event_data = await self._get_event_data()
+            if event_data is not None and "event" in event_data.lower():
+                self.rain_start.emit()
+                await self.plogging.info("Rain DETECTED!")
+                # если есть информация об ивенте, отправляем уведомление
+                
+                await self.plogging.debug("Try to send notify about rain")
+                await self.notify_users()
             
-            await self.plogging.debug("Try to send notify about rain")
-            await self.notify_users()
-        
-            await self.plogging.debug("Trying bot_sound")
-            scrap = await self._scrap_check()
-            
-            sum_of_scrap = await str_to_float(scrap)
-            self.rain_scrap.emit(sum_of_scrap)
-            if sum_of_scrap < 150:
-                await self.sound.bot_sound(self.sound.play_audio, *("sound.wav", 3.5, 0.6))
-            elif sum_of_scrap < 400:
-                await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
-            elif sum_of_scrap < 600:
-                await self.sound.bot_sound(self.sound.play_audio, *("stony.mp3", 7, 1.3))
-            elif sum_of_scrap < 1000:
-                await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 12, 0.6))
-            elif sum_of_scrap < 5000:
-                await self.sound.bot_sound(self.sound.play_audio, *("gimn.mp3", 19, 0.6))
-            else: 
-                await self.sound.bot_sound(self.sound.play_audio, *("5000.mp3", 12, 3))
-            old_scrap = scrap
-            await asyncio.sleep(1)
-            while True:
+                await self.plogging.debug("Trying bot_sound")
                 scrap = await self._scrap_check()
                 
-                if await str_to_float(scrap) is not None and await str_to_float(old_scrap) is not None:
-                    recent_scrap = await str_to_float(scrap) - await str_to_float(old_scrap)
-                    
-                else:
-                    recent_scrap = 0
-                    
-                if old_scrap is not None and recent_scrap >= 400:
-                    await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 8, 0.6))
-                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
-                    old_scrap = scrap
-                elif old_scrap is not None and recent_scrap >= 200:
+                sum_of_scrap = await str_to_float(scrap)
+                self.rain_scrap.emit(sum_of_scrap)
+                if sum_of_scrap < 150:
+                    await self.sound.bot_sound(self.sound.play_audio, *("sound.wav", 3.5, 0.6))
+                elif sum_of_scrap < 400:
                     await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
-                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
-                    old_scrap = scrap
-                elif old_scrap is not None and recent_scrap >= 100:
-                    await self.sound.bot_sound(self.sound.play_audio, *("potyzhno.mp3", 2, 1.5))
-                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
-                    old_scrap = scrap
-                elif old_scrap is not None and recent_scrap >= 50:
-                    await self.sound.bot_sound()
-                    await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
-                    old_scrap = scrap
+                elif sum_of_scrap < 600:
+                    await self.sound.bot_sound(self.sound.play_audio, *("stony.mp3", 7, 1.3))
+                elif sum_of_scrap < 1000:
+                    await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 12, 0.6))
+                elif sum_of_scrap < 5000:
+                    await self.sound.bot_sound(self.sound.play_audio, *("gimn.mp3", 19, 0.6))
+                else: 
+                    await self.sound.bot_sound(self.sound.play_audio, *("5000.mp3", 12, 3))
+                old_scrap = scrap
+                await asyncio.sleep(1)
+                while True:
+                    scrap = await self._scrap_check()
                     
-                if scrap is not None:
-                    self.rain_scrap.emit(await str_to_float(scrap))
-                    await self.plogging.debug("try to edit last message...")
-                    await self.edit_last_message(self.message)
-                    await asyncio.sleep(5)
+                    if await str_to_float(scrap) is not None and await str_to_float(old_scrap) is not None:
+                        recent_scrap = await str_to_float(scrap) - await str_to_float(old_scrap)
+                        
+                    else:
+                        recent_scrap = 0
+                        
+                    if old_scrap is not None and recent_scrap >= 400:
+                        await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 8, 0.6))
+                        await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                        old_scrap = scrap
+                    elif old_scrap is not None and recent_scrap >= 200:
+                        await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
+                        await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                        old_scrap = scrap
+                    elif old_scrap is not None and recent_scrap >= 100:
+                        await self.sound.bot_sound(self.sound.play_audio, *("potyzhno.mp3", 2, 1.5))
+                        await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                        old_scrap = scrap
+                    elif old_scrap is not None and recent_scrap >= 50:
+                        await self.sound.bot_sound()
+                        await self.plogging.info(f"Old scrap lowier than new on {recent_scrap}")
+                        old_scrap = scrap
                     
-                else:
-                    self.rain_end.emit()
-                    break
-        # сохраняем текущее время как время последнего запуска функции
-            self.last_check_time = datetime.datetime.now()
+                    if scrap is not None:
+                        self.rain_scrap.emit(await str_to_float(scrap))
+                        await self.plogging.debug("try to edit last message...")
+                        await self.edit_last_message(self.message)
+                        await asyncio.sleep(5)
+                        
+                    else:
+                        self.rain_end.emit()
+                        break
+            # сохраняем текущее время как время последнего запуска функции
+                self.last_check_time = datetime.datetime.now()
+        except Exception as e:
+            await self.plogging.error(f"Unhandled exception in check_event: {e}")
 
 
 
