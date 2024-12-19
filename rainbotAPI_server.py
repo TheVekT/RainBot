@@ -3,6 +3,9 @@ import websockets
 import json
 from plogging import Plogging
 import inspect
+import os
+import gzip
+import datetime
 
 class WebSocketServer:
     def __init__(self, host='192.168.0.106', port=8765):
@@ -17,10 +20,8 @@ class WebSocketServer:
         # Dictionary to keep track of connected clients
         self.clients = {}  # {websocket: {'address': (ip, port), 'connection_type': str}}
 
-        
-    def register_funcs(self, registred_functions: dict):
-        self.registered_functions = registred_functions
-
+    def register_funcs(self, registered_functions: dict):
+        self.registered_functions = registered_functions
 
     def _send_new_log_message(self):
         new_message = self.plogging.get_last_log_message()
@@ -35,11 +36,9 @@ class WebSocketServer:
         self.on_disconnect_callback = callback
 
     async def execute_func(self, func_name, arguments):
-        if self.register_funcs is not None:
+        if self.registered_functions is not None:
             func = self.registered_functions.get(func_name)
         else:
-            return
-        if not func:
             return {"type": "response", "message": f"Error: Function '{func_name}' is not registered."}
 
         # Process arguments
@@ -100,6 +99,100 @@ class WebSocketServer:
             except:
                 pass
 
+    async def get_archived_logs_for_period(self, websocket, days: int):
+        """
+        Отправляет клиенту заархивированные логи за последние N полных дней + текущий день.
+        Пример: если days = 5, то будут отобраны логи за последние 5 полных дней и за сегодня.
+        """
+
+        # Текущая дата
+        now = datetime.datetime.now()
+        # Начальная граница: N дней назад (включая весь сегодняшний день)
+        start_date = (now - datetime.timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Конечная граница: текущее время
+        end_date = now
+
+        # Создадим маппинг "папка -> уровни логирования"
+        folder_levels_map = {}
+        for level, folder in self.plogging.log_folders.items():
+            folder_levels_map.setdefault(folder, []).append(level)
+
+        # Структура для результата: { "debug": [ {"filename": "...", "date": "..."} ], "debug + error": [ ... ] }
+        logs_response = {}
+
+        # Формат имени файла архива: "log_dd-mm-YYYY_HH-MM-SS_archive.gz"
+        # Нам нужно распарсить дату из имени файла.
+        def parse_datetime_from_filename(filename):
+            # Ожидается формат: log_dd-mm-YYYY_HH-MM-SS_archive.gz
+            try:
+                base_name = filename[len("log_"):-len("_archive.gz")]
+                # base_name = "19-12-2024_10-30-00"
+                date_str, time_str = base_name.split('_')
+                day, month, year = date_str.split('-')
+                hour, minute, second = time_str.split('-')
+                dt = datetime.datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+                return dt
+            except Exception:
+                return None
+
+        # Обходим все папки
+        for folder, levels in folder_levels_map.items():
+            if not os.path.exists(folder):
+                continue
+
+            # Получаем список архивных файлов
+            files = [f for f in os.listdir(folder) if f.endswith("_archive.gz")]
+
+            for f in files:
+                file_dt = parse_datetime_from_filename(f)
+                if file_dt is None:
+                    continue
+                # Проверяем попадает ли файл в интервал
+                if start_date <= file_dt <= end_date:
+                    # Формируем ключ по уровням
+                    # Отсортируем уровни для консистентности
+                    levels_str = " + ".join(sorted(levels))
+
+                    # Отправляем только имя и дату
+                    logs_response.setdefault(levels_str, []).append({
+                        "filename": f,
+                        "date": file_dt.isoformat(),
+                        "folder": folder  # Добавим путь к папке для последующего доступа
+                    })
+
+        # Отправляем ответ клиенту
+        response = {
+            "type": "archived_logs",
+            "data": logs_response
+        }
+        await websocket.send(json.dumps(response))
+
+    async def send_log_file_content(self, websocket, folder, filename):
+        """
+        Отправляет содержимое указанного лог-файла.
+        """
+        file_path = os.path.join(folder, filename)
+        if not os.path.exists(file_path):
+            response = {"type": "error", "message": f"File '{filename}' not found in folder '{folder}'."}
+            await websocket.send(json.dumps(response))
+            return
+
+        try:
+            with gzip.open(file_path, 'rt', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            response = {"type": "error", "message": f"Error reading file '{filename}': {e}"}
+            await websocket.send(json.dumps(response))
+            return
+
+        # Отправляем содержимое файла
+        response = {
+            "type": "log_file_content",
+            "filename": filename,
+            "content": content
+        }
+        await websocket.send(json.dumps(response))
+
     async def handler(self, websocket, path):
         # Get client address
         client_address = websocket.remote_address
@@ -131,10 +224,28 @@ class WebSocketServer:
             async for message in websocket:
                 await self.plogging.debug(f"Message received from {client_address}: {message}")
                 if message.startswith('@'):
-                    if message[1:] == 'get_logs':
+                    if message.startswith('@get_logs'):
                         await self.send_packet(websocket=websocket, type='logs', message=self.plogging.get_history())
-                    elif message[1:] == 'get_all_logs':
-                        pass  # Implement as needed
+                    elif message.startswith('@get_archived_logs'):
+                        parts = message.split()
+                        if len(parts) == 2 and parts[1].isdigit():
+                            days = int(parts[1])
+                            await self.get_archived_logs_for_period(websocket, days)
+                        else:
+                            response = {
+                                "type": "response",
+                                "message": "Invalid format for @get_archived_logs. Use '@get_archived_logs <days>'."
+                            }
+                            await websocket.send(json.dumps(response))
+                    elif message.startswith('@get_log_file'):
+                        parts = message.split()
+                        if len(parts) == 3:
+                            folder = parts[1]
+                            filename = parts[2]
+                            await self.send_log_file_content(websocket, folder, filename)
+                    else:
+                        response = {"type": "error", "message": f"Unknown command @{message[1:]}."}
+                        await websocket.send(json.dumps(response))
                 elif message.startswith('/'):
                     temp = message[1:].split()
                     func_name = temp[0]
