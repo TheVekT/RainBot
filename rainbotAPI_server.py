@@ -40,7 +40,7 @@ class WebSocketServer:
         else:
             return
         if not func:
-            return {"type": "error", "message": f"Error: Function '{func_name}' is not registered."}
+            return {"type": "response", "message": f"Error: Function '{func_name}' is not registered."}
 
         # Process arguments
         processed_args = []
@@ -58,7 +58,7 @@ class WebSocketServer:
                 result = func(*processed_args)
             return {"type": "response", "message": "Function executed successfully.", "result": result}
         except Exception as e:
-            return {"type": "error", "message": f"Error executing function '{func_name}': {e}"}
+            return {"type": "response", "message": f"Error executing function '{func_name}': {e}"}
 
     async def send_packet(self, websocket, type, message):
         if websocket:

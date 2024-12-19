@@ -27,11 +27,13 @@ class Plogging:
         return cls._instance
 
     def __init__(self):
+        self.logs_dir = os.path.normpath("./logs")
+        self.config_file = os.path.join(self.logs_dir, "logging_config.json")
         if self._initialized:
             return  # Prevent re-initialization
 
-        self.logs_dir = os.path.normpath("./logs")
-        self.config_file = os.path.join(self.logs_dir, "logging_config.json")
+        
+        
         self.last_log_date = self._get_current_date()
         self.log_history = []
         if not os.path.exists(self.logs_dir):
