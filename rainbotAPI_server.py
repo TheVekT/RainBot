@@ -265,7 +265,7 @@ class WebSocketServer:
     async def start(self):
         while True:
             try:
-                self.server = await websockets.serve(self.handler, self.host, self.port, max_size=3145728)
+                self.server = await websockets.serve(self.handler, self.host, self.port, max_size=16777216)
                 
                 await self.plogging.info(f"WebSocket server started on ws://{self.host}:{self.port}")
                 await self.server.wait_closed()
