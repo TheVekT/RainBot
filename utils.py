@@ -6,9 +6,10 @@ import asyncio
 import psutil
 import disnake
 from plogging import Plogging
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+# from selenium import webdriver
+# from selenium.webdriver.chrome.service import Service
+# from selenium.webdriver.chrome.options import Options
+import undetected_chromedriver as uc  # Измененный импорт
 from disnake.ext import commands, tasks
 from bs4 import BeautifulSoup
 
@@ -39,8 +40,8 @@ class RainParser:
         self.enable_options()
 
     def enable_options(self):
-        self.service = Service('c:\\Program Files\\chromedriver-win64\\chromedriver.exe') # путь к драйверу браузера
-        self.options = Options()
+        # Путь к драйверу больше не требуется при использовании undetected_chromedriver
+        self.options = uc.ChromeOptions()
         self.options.add_argument("--unique-arg")  # Добавляем уникальный аргумент
         self.options.add_argument('--no-sandbox')  # Отключение песочницы (sandbox)
         self.options.add_argument('--disable-dev-shm-usage')  # Отключение использования /dev/shm
@@ -54,17 +55,25 @@ class RainParser:
         self.options.add_argument('--disable-popup-blocking')  # Отключение блокировки всплывающих окон
         self.options.add_argument('--disable-infobars')  # Отключение информационных панелей
         self.options.add_argument('--disable-plugins')  # Отключение плагинов браузера
-        self.options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
+        self.options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                                  'AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
         self.options.add_argument('accept-language=en-US,en;q=0.9')
-        self.options.add_argument("--window-position=-2000,0")
-        # self.options.add_argument('--headless=new')
+        self.options.add_argument("--window-position=0,0")
+        self.options.add_argument("--headless=new")  # Запуск браузера в фоновом режиме
+        
         # Отключение изображений
         self.prefs = {
             "profile.managed_default_content_settings.images": 2,  # Отключение изображений
         }
         self.options.add_experimental_option("prefs", self.prefs)
+        self.options.add_argument('--disable-blink-features=AutomationControlled')
 
-
+    def connect_bot(self, botObject: commands.Bot):
+        self.bot = botObject
+        self.sound = PlaySoundOnBot(self.bot)
+        
+        
     async def driver_quit(self):
         if self.driver:
             try:
@@ -73,11 +82,6 @@ class RainParser:
                 await self.plogging.error(f"Error while quitting browser: {e}")
             finally:
                 self.driver = None  # Обязательно освобождаем ресурс
-    
-    def connect_bot(self, botObject: commands.Bot):
-        self.bot = botObject
-        self.sound = PlaySoundOnBot(self.bot)
-    
 
     async def close_browsers(self):
         chrome_processes = [proc for proc in psutil.process_iter(['pid', 'name']) if proc.info['name'] == 'chrome.exe']
@@ -108,7 +112,7 @@ class RainParser:
         """
         if self.last_check_time is not None:
             elapsed_time = datetime.datetime.now() - self.last_check_time
-            if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
+            if elapsed_time.total_seconds() < 1500:  # 1500 секунд = 25 минут
                 return
             
         await self.plogging.debug("Trying to restart browser...")
@@ -124,12 +128,13 @@ class RainParser:
         await self.close_browsers()
 
         try:
-            self.driver = webdriver.Chrome(service=self.service, options=self.options)
+            self.driver = uc.Chrome(options=self.options)  # Используем undetected_chromedriver
             self.url = 'https://bandit.camp/'
             self.driver.get(self.url)
             self.driver.implicitly_wait(5)  # ожидание до 5 секунд
         except Exception as e:
             await self.plogging.error(f"An error occurred during browser restart: {e}")
+
 
                     
     async def _get_event_data(self):
@@ -148,7 +153,7 @@ class RainParser:
                 if event_div is not None:
                         
                     event_data = event_div.text
-                    await self.plogging.debug(event_data) # вывод содержимого переменной event_data в консоль
+                    await self.plogging.debug(event_data)  # вывод содержимого переменной event_data в консоль
                 else:
                     event_data = None
                 return event_data
