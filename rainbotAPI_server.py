@@ -19,6 +19,8 @@ class WebSocketServer:
         self.registered_functions = None
         # Dictionary to keep track of connected clients
         self.clients = {}  # {websocket: {'address': (ip, port), 'connection_type': str}}
+        
+    
 
     def register_funcs(self, registered_functions: dict):
         self.registered_functions = registered_functions
@@ -69,6 +71,13 @@ class WebSocketServer:
                 await websocket.send(json.dumps(response))
             except Exception as e:
                 await self.plogging.error(f"Error sending message: {e}")
+                
+    async def get_registered_functions(self, websocket):
+        response = {
+            "type": "registered_functions",
+            "data": list(self.registered_functions.keys())
+        }
+        await websocket.send(json.dumps(response))
 
     async def broadcast_packet(self, type, message, client_type=None):
         """Send a packet to all connected clients, optionally filtering by client type."""
@@ -243,6 +252,8 @@ class WebSocketServer:
                             folder = parts[1]
                             filename = parts[2]
                             await self.send_log_file_content(websocket, folder, filename)
+                    elif message.startswith('@registered_functions'):
+                        await self.get_registered_functions(websocket)
                     else:
                         response = {"type": "error", "message": f"Unknown command @{message[1:]}."}
                         await websocket.send(json.dumps(response))

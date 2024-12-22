@@ -57,7 +57,7 @@ class RainParser:
         self.options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
         self.options.add_argument('accept-language=en-US,en;q=0.9')
         self.options.add_argument("--window-position=-2000,0")
-        self.options.add_argument('--headless=new')
+        # self.options.add_argument('--headless=new')
         # Отключение изображений
         self.prefs = {
             "profile.managed_default_content_settings.images": 2,  # Отключение изображений
