@@ -36,44 +36,43 @@ class RainParser:
         self.rain_scrap = Signal()
         self.plogging = Plogging()
         self.bot = None
-        
-        self.enable_options()
 
-    def enable_options(self):
-        # Путь к драйверу больше не требуется при использовании undetected_chromedriver
-        self.options = uc.ChromeOptions()
-        self.options.add_argument("--unique-arg")  # Добавляем уникальный аргумент
-        self.options.add_argument('--no-sandbox')  # Отключение песочницы (sandbox)
-        self.options.add_argument('--disable-dev-shm-usage')  # Отключение использования /dev/shm
-        self.options.add_argument('--disable-blink-features=AutomationControlled')  # Отключение определенных функций Blink, связанных с автоматизацией
-        self.options.add_argument('--disable-browser-side-navigation')  # Отключение навигации на стороне браузера
-        self.options.add_argument('--disable-gpu')  # Отключение GPU
-        self.options.add_argument('--window-size=1920,1080')  # Установка размеров окна браузера
-        self.options.add_argument('--disable-notifications')  # Отключение уведомлений
-        self.options.add_argument('--disable-extensions')  # Отключение расширений браузера
-        self.options.add_argument('--ignore-certificate-errors')  # Игнорирование ошибок сертификата
-        self.options.add_argument('--disable-popup-blocking')  # Отключение блокировки всплывающих окон
-        self.options.add_argument('--disable-infobars')  # Отключение информационных панелей
-        self.options.add_argument('--disable-plugins')  # Отключение плагинов браузера
-        self.options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                                  'AppleWebKit/537.36 (KHTML, like Gecko) '
-                                  'Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
-        self.options.add_argument('accept-language=en-US,en;q=0.9')
-        self.options.add_argument("--window-position=0,0")
-        self.options.add_argument("--headless=new")  # Запуск браузера в фоновом режиме
-        
+    def get_chrome_options(self):
+        """Создаёт и возвращает новый объект ChromeOptions."""
+        options = uc.ChromeOptions()
+        options.add_argument("--unique-arg")  # Добавляем уникальный аргумент
+        options.add_argument('--no-sandbox')  # Отключение песочницы (sandbox)
+        options.add_argument('--disable-dev-shm-usage')  # Отключение использования /dev/shm
+        options.add_argument('--disable-blink-features=AutomationControlled')  # Отключение определенных функций Blink, связанных с автоматизацией
+        options.add_argument('--disable-browser-side-navigation')  # Отключение навигации на стороне браузера
+        options.add_argument('--disable-gpu')  # Отключение GPU
+        options.add_argument('--window-size=1920,1080')  # Установка размеров окна браузера
+        options.add_argument('--disable-notifications')  # Отключение уведомлений
+        options.add_argument('--disable-extensions')  # Отключение расширений браузера
+        options.add_argument('--ignore-certificate-errors')  # Игнорирование ошибок сертификата
+        options.add_argument('--disable-popup-blocking')  # Отключение блокировки всплывающих окон
+        options.add_argument('--disable-infobars')  # Отключение информационных панелей
+        options.add_argument('--disable-plugins')  # Отключение плагинов браузера
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                             'AppleWebKit/537.36 (KHTML, like Gecko) '
+                             'Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
+        options.add_argument('accept-language=en-US,en;q=0.9')
+        options.add_argument("--window-position=0,0")
+        options.add_argument("--headless=new")  # Запуск браузера в фоновом режиме
+
         # Отключение изображений
-        self.prefs = {
+        prefs = {
             "profile.managed_default_content_settings.images": 2,  # Отключение изображений
         }
-        self.options.add_experimental_option("prefs", self.prefs)
-        self.options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_experimental_option("prefs", prefs)
+        options.add_argument('--disable-blink-features=AutomationControlled')
+
+        return options
 
     def connect_bot(self, botObject: commands.Bot):
         self.bot = botObject
         self.sound = PlaySoundOnBot(self.bot)
-        
-        
+
     async def driver_quit(self):
         if self.driver:
             try:
@@ -128,15 +127,14 @@ class RainParser:
         await self.close_browsers()
 
         try:
-            self.driver = uc.Chrome(options=self.options)  # Используем undetected_chromedriver
+            options = self.get_chrome_options()  # Получаем новый объект ChromeOptions
+            self.driver = uc.Chrome(options=options)  # Используем undetected_chromedriver
             self.url = 'https://bandit.camp/'
             self.driver.get(self.url)
             self.driver.implicitly_wait(5)  # ожидание до 5 секунд
         except Exception as e:
             await self.plogging.error(f"An error occurred during browser restart: {e}")
 
-
-                    
     async def _get_event_data(self):
         if self.driver is not None:
             try:
@@ -151,7 +149,6 @@ class RainParser:
                 await self.plogging.debug(str(event_div))
 
                 if event_div is not None:
-                        
                     event_data = event_div.text
                     await self.plogging.debug(event_data)  # вывод содержимого переменной event_data в консоль
                 else:
