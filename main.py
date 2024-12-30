@@ -371,7 +371,7 @@ async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.M
             return
         
     stats_data = stats.get_user_stats(member.id, date)
-
+    plogging.debug(f'Stats data: {stats_data}')
     if stats_data:
         embed = disnake.Embed(
             title=f"Statistics for {member.name}",
