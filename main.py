@@ -49,7 +49,7 @@ async def on_ready():
     global cdown, sound, rain, stats, teleg_bot
     cdown = ConfigManager()
     await cdown.create_config()
-    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479)
+    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=30)
     sound = PlaySoundOnBot(bot)
     rain = RainParser()
     if rain.bot is None:
