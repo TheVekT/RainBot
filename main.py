@@ -326,26 +326,52 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {e}", ephemeral=True)
 
-"""
-@bot.slash_command(name="getstats", description="Get user statistics.")
-async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member):
 
+
+@bot.slash_command(name="getstats", description="Get user statistics.")
+async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member, date: str = None):
+    await ctx.response.defer(ephemeral=True)
+    
+    if date is None and member is None:
+        embed = disnake.Embed(
+        description="Incorect date.",
+        colour=0xF0C43F,
+        )
+        embed.add_field(
+            name="Usage",
+            value="`/getstats @user date`\nSingle date format: YYYY.MM.DD, example: 2024.12.29\nDate range format: YYYY.MM.DD - YYYY.MM.DD, example: 2024.12.29 - 2024.12.31",
+            inline=False)
+        embed.set_footer(
+            text="© RainBot",
+        )
+        await ctx.followup.send(embed=embed)
+        
+        return
     await plogging.info(f"Command 'getstats' was used by {ctx.author.display_name}")
 
-    await ctx.response.defer(ephemeral=True)
-    user_id = ctx.author.id
+    date = 'previous' if date is None else date
+    
     if not hasattr(getstats, 'last_use_time'):
         getstats.last_use_time = {}  # Создаем словарь для хранения времени последнего использования команды
     
     user_id = ctx.author.id
     if user_id in getstats.last_use_time:
         last_use_time = getstats.last_use_time[user_id]
-        cooldown = await check_user_cooldown(member_id=user_id, command_name="getstats", last_command_use=last_use_time)
+        cooldown = await cdown.check_user_cooldown(member_id=user_id, command_name="getstats", last_command_use=last_use_time)
         if cooldown != 0:
-            await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
+            embed = disnake.Embed(
+            description=f"You have {cooldown} sec. cooldown left for this command.",
+            colour=0xF0C43F,
+            )
+            embed.set_footer(
+                text="© RainBot",
+            )
+            await ctx.followup.send(embed=embed)
             await plogging.info(f"User have a {cooldown} sec. cooldown.")
-            return   
-    stats_data = stats.get_user_statistics(member.id)
+            return
+        
+    stats_data = stats.get_user_stats(member.id, date)
+
     if stats_data:
         embed = disnake.Embed(
             title=f"Statistics for {member.name}",
@@ -353,20 +379,24 @@ async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.M
             colour=0xF0C43F,
         )
         embed.set_thumbnail(url=member.avatar.url)  # Иконка мембера
-        embed.add_field(name="**Voice Time:**", value=await format_duration(stats_data['voice_time']), inline=False)
-        embed.add_field(name="**Mute Time:**", value=await format_duration(stats_data['mute_time']), inline=False)
-        embed.add_field(name="**Deaf Time:**", value=await format_duration(stats_data['deaf_time']), inline=False)
-        embed.add_field(name="**Alone Time:**", value=await format_duration(stats_data['alone_time']), inline=False)
-        embed.add_field(name="**AFK Time:**", value=await format_duration(stats_data['afk_time']), inline=False)
+        for day, day_stat in stats_data['days'].items():
+            text = f'''
+            **Voice Time:** {day_stat.get("voice_online", 0)},
+            **Mute:** {day_stat.get("voice_mute", 0)},
+            **Full mute:** {day_stat.get("voice_deaf", 0)},
+            **Online time:** {day_stat.get("online", 0)},
+            **Offline time:** {day_stat.get("offline", 0)},
+            **Voice alone:** {day_stat.get("voice_alone", 0)},
+            '''
+            embed.add_field(name=f" **{day}** ", value=text, inline=False)
         embed.set_footer(text="© RainBot")
         
-        await ctx.followup.send(embed=embed)
+        await ctx.followup.send(embed=embed, ephemeral=False)
     else:
-        await ctx.followup.send("No statistics found for this user.")
+        await ctx.followup.send("No statistics found for this user in this date range.")
     
     
     getstats.last_use_time[user_id] = datetime.datetime.now()    
-"""    
     
     
     
@@ -406,7 +436,7 @@ async def test(ctx: disnake.ApplicationCommandInteraction):
 
 
 mine_channel_ids = { 
-    1: 880834956362932314,
+    1: 1168637408896622672,
     2: 901174980673425408,
     3: 1168637791278739497
     }

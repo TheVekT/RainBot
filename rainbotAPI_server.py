@@ -202,7 +202,7 @@ class WebSocketServer:
         }
         await websocket.send(json.dumps(response))
 
-    async def handler(self, websocket, path):
+    async def handler(self, websocket):
         # Get client address
         client_address = websocket.remote_address
         await self.plogging.info(f"New connection: {client_address}")

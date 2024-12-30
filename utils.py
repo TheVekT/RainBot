@@ -518,7 +518,7 @@ async def str_to_float(value_str):
     
     return value_float
 
-async def format_duration(seconds):
+def format_duration(seconds):
     """Форматирование времени в строку вида 'X days X hours X min. X sec.'."""
     days, remainder = divmod(seconds, 86400)  # 86400 секунд в дне
     hours, remainder = divmod(remainder, 3600)  # 3600 секунд в часе

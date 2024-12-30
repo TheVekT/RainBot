@@ -204,80 +204,119 @@ class StatisticsTracker:
     def get_user_stats(self, user_id, day='previous'):
         """
         Get user stats for a given day or range of days from the database.
+        Returns None if no data is found or if the date format is incorrect.
         """
-        # Определяем даты
-        if day == 'today':
-            date_list = [datetime.now().date()]
-        elif day == 'previous':
-            date_list = [(datetime.now() - timedelta(days=1)).date()]
-        elif isinstance(day, str):
-            if '-' in day:
-                # Format: YYYY.MM.DD - YYYY.MM.DD
-                start_str, end_str = day.split('-')
-                start_date = datetime.strptime(start_str.strip(), '%Y.%m.%d').date()
-                end_date = datetime.strptime(end_str.strip(), '%Y.%m.%d').date()
-                if start_date > end_date:
-                    start_date, end_date = end_date, start_date
-                date_list = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+        try:
+            # Определяем даты
+            if day == 'today':
+                date_list = [datetime.now().date()]
+            elif day == 'previous':
+                date_list = [(datetime.now() - timedelta(days=1)).date()]
+            elif isinstance(day, str):
+                if '-' in day:
+                    # Format: YYYY.MM.DD - YYYY.MM.DD
+                    start_str, end_str = day.split('-')
+                    start_date = datetime.strptime(start_str.strip(), '%Y.%m.%d').date()
+                    end_date = datetime.strptime(end_str.strip(), '%Y.%m.%d').date()
+                    if start_date > end_date:
+                        start_date, end_date = end_date, start_date
+                    date_list = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+                else:
+                    # Single date
+                    single_date = datetime.strptime(day.strip(), '%Y.%m.%d').date()
+                    date_list = [single_date]
+            elif isinstance(day, date):
+                date_list = [day]
+            elif isinstance(day, (list, tuple)):
+                # Ensure all elements in the list/tuple are date objects
+                date_list = []
+                for d in day:
+                    if isinstance(d, date):
+                        date_list.append(d)
+                    elif isinstance(d, str):
+                        # Attempt to parse each string to a date
+                        parsed_date = datetime.strptime(d.strip(), '%Y.%m.%d').date()
+                        date_list.append(parsed_date)
+                    else:
+                        # If any element is neither a date nor a valid string, raise an error
+                        raise ValueError("Invalid date in list/tuple")
             else:
-                # Single date
-                single_date = datetime.strptime(day.strip(), '%Y.%m.%d').date()
-                date_list = [single_date]
-        elif isinstance(day, date):
-            date_list = [day]
-        elif isinstance(day, (list, tuple)):
-            date_list = day
-        else:
-            raise ValueError("Invalid day parameter")
+                # If 'day' parameter is of an unexpected type
+                return None  # Instead of raising ValueError
+        except (ValueError, TypeError):
+            # If date parsing fails or an invalid type is encountered
+            return None
 
         user_name = None
         stats = {}
 
-        # Подключаемся к БД для выборки
-        conn = sqlite3.connect(self.db_path)
+        try:
+            # Подключаемся к БД для выборки
+            conn = sqlite3.connect(self.db_path)
 
-        for single_date in date_list:
-            day_start = datetime.combine(single_date, datetime.min.time())
-            day_end = datetime.combine(single_date, datetime.max.time())
+            for single_date in date_list:
+                day_start = datetime.combine(single_date, datetime.min.time())
+                day_end = datetime.combine(single_date, datetime.max.time())
 
-            # Выборка периодов за конкретный день
-            rows = conn.execute("""
-            SELECT user_name, state, start_time, end_time
-            FROM user_states
-            WHERE user_id = ?
-            AND ((start_time <= ? AND end_time >= ?) 
-                 OR (start_time >= ? AND start_time <= ?))
-            """, (str(user_id), day_end.isoformat(), day_start.isoformat(), day_start.isoformat(), day_end.isoformat())).fetchall()
+                # Выборка периодов за конкретный день
+                rows = conn.execute("""
+                SELECT user_name, state, start_time, end_time
+                FROM user_states
+                WHERE user_id = ?
+                AND ((start_time <= ? AND end_time >= ?) 
+                    OR (start_time >= ? AND start_time <= ?))
+                """, (
+                    str(user_id),
+                    day_end.isoformat(),
+                    day_start.isoformat(),
+                    day_start.isoformat(),
+                    day_end.isoformat()
+                )).fetchall()
 
-            periods = []
-            for r in rows:
-                if not user_name:
-                    user_name = r[0]
-                try:
-                    s_time = datetime.fromisoformat(r[2])
-                    e_time = datetime.fromisoformat(r[3])
-                except:
-                    continue
+                if not rows:
+                    continue  # No data for this date, proceed to next
 
-                # Обрезаем периоды по границам дня
-                if s_time < day_start:
-                    s_time = day_start
-                if e_time > day_end:
-                    e_time = day_end
+                periods = []
+                for r in rows:
+                    if not user_name:
+                        user_name = r[0]
+                    try:
+                        s_time = datetime.fromisoformat(r[2])
+                        e_time = datetime.fromisoformat(r[3])
+                    except ValueError:
+                        continue  # Skip rows with invalid datetime formats
 
-                if e_time > s_time:
-                    periods.append({
-                        'state': r[1],
-                        'start_time': s_time,
-                        'end_time': e_time
-                    })
+                    # Обрезаем периоды по границам дня
+                    if s_time < day_start:
+                        s_time = day_start
+                    if e_time > day_end:
+                        e_time = day_end
 
-            total_times = self.process_periods(single_date, periods)
-            stats[single_date.strftime('%Y-%m-%d')] = total_times
+                    if e_time > s_time:
+                        periods.append({
+                            'state': r[1],
+                            'start_time': s_time,
+                            'end_time': e_time
+                        })
 
-        conn.close()
+                # Process periods only if there are valid periods
+                if periods:
+                    total_times = self.process_periods(single_date, periods)
+                    stats[single_date.strftime('%Y-%m-%d')] = total_times
+
+        except sqlite3.Error:
+            # Handle any database connection or query errors
+            return None
+        finally:
+            conn.close()
+
+        if not stats:
+            # No data found for any of the dates
+            return None
+
         if not user_name:
             user_name = "Unknown"
+
         return {'name': user_name, 'days': stats}
 
     def process_periods(self, single_date, periods):
