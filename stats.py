@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, date
 from plogging import Plogging
 
 
-def get_member_state(member):
+def get_member_state(member: disnake.Member) -> str:
     """Determine the current state of a member."""
     if member.status is disnake.Status.offline:
         return "offline"
@@ -257,7 +257,11 @@ class StatisticsTracker:
             for single_date in date_list:
                 day_start = datetime.combine(single_date, datetime.min.time())
                 day_end = datetime.combine(single_date, datetime.max.time())
-
+                
+                if single_date == datetime.now().date():
+                    now = datetime.now()
+                    if day_end > now:
+                        day_end = now
                 # Выборка периодов за конкретный день
                 rows = conn.execute("""
                 SELECT user_name, state, start_time, end_time
