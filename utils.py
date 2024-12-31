@@ -36,6 +36,8 @@ class RainParser:
         self.rain_scrap = Signal()
         self.plogging = Plogging()
         self.bot = None
+        self.restarting_browser = False
+        self.rain_now = False
 
     def get_chrome_options(self):
         """Создаёт и возвращает новый объект ChromeOptions."""
@@ -109,6 +111,10 @@ class RainParser:
         """
         Periodicaly task to restarting browser after event
         """
+        
+        if self.rain_now is True:
+            return
+        self.restarting_browser = True
         if self.last_check_time is not None:
             elapsed_time = datetime.datetime.now() - self.last_check_time
             if elapsed_time.total_seconds() < 1500:  # 1500 секунд = 25 минут
@@ -132,6 +138,7 @@ class RainParser:
             self.url = 'https://bandit.camp/'
             self.driver.get(self.url)
             self.driver.implicitly_wait(5)  # ожидание до 5 секунд
+            self.restarting_browser = False
         except Exception as e:
             await self.plogging.error(f"An error occurred during browser restart: {e}")
 
@@ -237,7 +244,9 @@ class RainParser:
     async def check_event(self):
         try:
             # проверяем, прошло ли уже 30 минут с момента последнего запуска функции
-            if self.last_check_time is not None:
+            if self.restarting_browser is True:
+                return
+            if self.last_check_time is not None :
                 elapsed_time = datetime.datetime.now() - self.last_check_time
                 if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
                     return
@@ -246,6 +255,7 @@ class RainParser:
             event_data = await self._get_event_data()
             if event_data is not None and "event" in event_data.lower():
                 self.rain_start.emit()
+                self.rain_now = True
                 await self.plogging.info("Rain DETECTED!")
                 # если есть информация об ивенте, отправляем уведомление
                 
@@ -305,6 +315,7 @@ class RainParser:
                         
                     else:
                         self.rain_end.emit()
+                        self.rain_now = False   
                         break
             # сохраняем текущее время как время последнего запуска функции
                 self.last_check_time = datetime.datetime.now()

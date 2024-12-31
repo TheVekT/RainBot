@@ -180,7 +180,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             await ctx.followup.send(embed=embed)
             return
     #koja protection
-        if member.id in (595255205348507678, 1084386974967812167):
+        if member.id in (1084386974967812167):
             await plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
@@ -272,7 +272,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             await ctx.followup.send(embed=embed)
             return
     #koja protection
-        if member.id in (595255205348507678, 1084386974967812167):
+        if member.id in (1084386974967812167):
             await plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
@@ -329,7 +329,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
 
 
 @bot.slash_command(name="getstats", description="Get user statistics.")
-async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member, date: str = None):
+async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member = None, date: str = None):
     await ctx.response.defer(ephemeral=True)
     
     if date is None and member is None:
@@ -471,9 +471,9 @@ async def shutdown_stop(shutdown_delay_seconds: int = 180):
     await plogging.info(f'Stopping main script with shutdown in {minutes:.1f} minutes...')
     os.system(f"shutdown /s /t {shutdown_delay_seconds}")
     if searching_rain.is_running():
-        searching_rain.cancel()
+        searching_rain.stop()
     if restarting_browser.is_running():
-        restarting_browser.cancel()
+        restarting_browser.stop()
     await rain.driver_quit()
     await rain.close_browsers()
     await bot.close()
@@ -485,26 +485,28 @@ async def shutdown_stop(shutdown_delay_seconds: int = 180):
 async def stop():
     await plogging.info('Stopping main script...')
     if searching_rain.is_running():
-        searching_rain.cancel()
+        searching_rain.stop()
     if restarting_browser.is_running():
-        restarting_browser.cancel()
+        restarting_browser.stop()
     await rain.driver_quit()
     await rain.close_browsers()
     await bot.close()
     await teleg_bot.stop()
     plogging.archive_logs()
     stats.stop()
+    import os
+    os.abort()
     
 async def restart():
     await plogging.info('RESTARTING main script...')
     await rain.driver_quit()
     await rain.close_browsers()
     if restarting_browser.is_running():
-        restarting_browser.cancel()
+        restarting_browser.stop()
         await asyncio.sleep(1)
         restarting_browser.start()
     if searching_rain.is_running():
-        searching_rain.cancel()
+        searching_rain.stop()
         await asyncio.sleep(1)
         rain.last_check_time = None
         searching_rain.start()
