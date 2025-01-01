@@ -12,14 +12,14 @@ def get_member_state(member: disnake.Member) -> str:
     if member.status is disnake.Status.offline:
         return "offline"
     elif member.voice:
-        if member.voice.self_deaf:
-            return "voice_deaf"
-        elif member.voice.self_mute:
-            return "voice_mute"
-        elif member.voice.channel == member.guild.afk_channel:
+        if member.voice.channel == member.guild.afk_channel:
             return "voice_afk"
         elif len(member.voice.channel.members) == 1:
             return "voice_alone"
+        elif member.voice.self_deaf:
+            return "voice_deaf"
+        elif member.voice.self_mute:
+            return "voice_mute"
         else:
             return "voice_online"
     else:
