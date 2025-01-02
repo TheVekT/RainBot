@@ -180,7 +180,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             await ctx.followup.send(embed=embed)
             return
     #koja protection
-        if member.id in (1084386974967812167):
+        if member.id in (1084386974967812167, -1) or member.voice.self_stream or member.voice.self_video:
             await plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
@@ -272,7 +272,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             await ctx.followup.send(embed=embed)
             return
     #koja protection
-        if member.id in (1084386974967812167):
+        if member.id in (1084386974967812167, -1) or member.voice.self_stream or member.voice.self_video:
             await plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
