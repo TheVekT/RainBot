@@ -28,13 +28,13 @@ class Signal:
 
 
 class RainParser:
-    def __init__(self):
+    def __init__(self, plogging: Plogging | None = None):
         self.driver = None
         self.last_check_time = None
         self.rain_start = Signal()
         self.rain_end = Signal()
         self.rain_scrap = Signal()
-        self.plogging = Plogging()
+        self.plogging = Plogging() if plogging is None else plogging
         self.bot = None
         self.restarting_browser = False
         self.rain_now = False
@@ -176,6 +176,7 @@ class RainParser:
         if event_data is not None and "event" in event_data.lower():
                 
             #match = re.search(r'share\s(\d{1,3}(?:,\d{3})*,\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488,56
+            
             match = re.search(r'share\s(\d{1,3}(?:,\d{3})*\.\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488.56
             if match:
                 global number
@@ -325,10 +326,10 @@ class RainParser:
 
 
 class ConfigManager:
-    def __init__(self, config_dir='config', config_file='config.json'):
+    def __init__(self, config_dir='config', config_file='config.json', plogging: Plogging | None = None):
         self.config_dir = config_dir
         self.config_file = os.path.join(config_dir, config_file)
-        self.plogging = Plogging()
+        self.plogging = Plogging() if plogging is None else plogging
         self.default_config = {
             'default': {
                 'commands_cooldown': {
@@ -396,9 +397,9 @@ class ConfigManager:
 
 
 class PlaySoundOnBot:
-    def __init__(self, botObject: commands.Bot):
+    def __init__(self, botObject: commands.Bot, plogging: Plogging | None = None):
         self.bot = botObject
-        self.plogging = Plogging()
+        self.plogging = Plogging() if plogging is None else plogging
     async def bot_sound(self, play_audio_func=None, *play_audio_args, channel_id=None):
         """
         Параметры:

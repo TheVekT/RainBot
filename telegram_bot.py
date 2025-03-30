@@ -9,7 +9,7 @@ from stats import get_member_state
 SET_THRESHOLD, GET_THRESHOLD, GET_DISCORD_NICK = range(3)
 
 class TelegramBot:
-    def __init__(self, token, rainparser):
+    def __init__(self, token, rainparser, plogging: Plogging | None = None):
         self.token = token
         self.application = Application.builder().token(token).build()
         self.rain = rainparser
@@ -20,7 +20,7 @@ class TelegramBot:
         self.init_connectors()
         self.active_events = {}  # Stores active user messages
         self.set_commands()
-        self.plogging = Plogging()
+        self.plogging = Plogging() if plogging is None else plogging
         
     def connect_discord_module(self, module):
         self.discord = module

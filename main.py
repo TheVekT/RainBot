@@ -47,16 +47,16 @@ async def restarting_browser():
 @bot.event
 async def on_ready():
     global cdown, sound, rain, stats, teleg_bot
-    cdown = ConfigManager()
+    cdown = ConfigManager(plogging=plogging)
     await cdown.create_config()
-    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=30)
-    sound = PlaySoundOnBot(bot)
-    rain = RainParser()
+    stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=700, plogging=plogging)
+    sound = PlaySoundOnBot(bot, plogging=plogging)
+    rain = RainParser(plogging=plogging)
     if rain.bot is None:
         rain.connect_bot(bot)
-    server = WebSocketServer(host='192.168.0.106')
+    server = WebSocketServer(host='192.168.0.106', plogging=plogging)
 
-    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain)
+    teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain, plogging=plogging)
     teleg_bot.connect_discord_module(stats)
     await teleg_bot.start_polling()
 

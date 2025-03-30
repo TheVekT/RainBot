@@ -8,8 +8,8 @@ import gzip
 import datetime
 
 class WebSocketServer:
-    def __init__(self, host='192.168.0.106', port=8765):
-        self.plogging = Plogging()
+    def __init__(self, host='192.168.0.106', port=8765, plogging: Plogging | None = None):
+        self.plogging = Plogging() if plogging is None else plogging
         self.plogging.on_log_message.connect(self._send_new_log_message)
         self.host = host
         self.port = port
@@ -37,29 +37,83 @@ class WebSocketServer:
         """Register a callback for when a client disconnects."""
         self.on_disconnect_callback = callback
 
-    async def execute_func(self, func_name, arguments):
-        if self.registered_functions is not None:
-            func = self.registered_functions.get(func_name)
-        else:
-            return {"type": "response", "message": f"Error: Function '{func_name}' is not registered."}
+    async def execute_func(self, func_string: str, websocket):
+        import shlex
+        """
+        Разбирает строку команды, определяет имя функции и аргументы.
+        Поддерживает два вида передачи аргументов:
+        
+        1. Именованные аргументы в формате:
+            --arg:"Текст с пробелами"
+        2. Позиционные аргументы (без префикса), например:
+            /function_name 10 20
+        
+        В итоге функция вызывается с использованием распаковки:
+            func(*positional_args, **keyword_args)
+        """
+        try:
+            # Разбиваем строку с учетом кавычек
+            tokens = shlex.split(func_string)
+            if not tokens:
+                await websocket.send(json.dumps({
+                    "type": "response",
+                    "message": "Error: command null."
+                }))
+                return
 
-        # Process arguments
-        processed_args = []
-        for arg in arguments:
-            if arg.isdigit():
-                processed_args.append(int(arg))
-            else:
-                processed_args.append(arg)
+            # Первый токен — имя функции
+            func_name = tokens[0].lstrip('/')
+            positional_args = []
+            keyword_args = {}
+
+            # Обрабатываем оставшиеся токены
+            for token in tokens[1:]:
+                # Если токен начинается с '--' и содержит двоеточие, считаем его именованным аргументом
+                if token.startswith('--') and ':' in token:
+                    # Убираем префикс '--' и разделяем по первому двоеточию
+                    arg_key, arg_value = token[2:].split(':', 1)
+                    # Если значение состоит только из цифр, преобразуем в int
+                    if arg_value.isdigit():
+                        arg_value = int(arg_value)
+                    keyword_args[arg_key] = arg_value
+                else:
+                    # Позиционный аргумент
+                    if token.isdigit():
+                        token = int(token)
+                    positional_args.append(token)
+        except Exception as e:
+            await websocket.send(json.dumps({
+                "type": "response",
+                "message": f"Error: {e}"
+            }))
+            return
+
+
+        if self.registered_functions is None or func_name not in self.registered_functions:
+            await websocket.send(json.dumps({
+                "type": "response",
+                "message": f"Error: Function '{func_name}' not registered."
+            }))
+            return
+
+        func = self.registered_functions.get(func_name)
 
         try:
+            # Выполнение функции (асинхронная или обычная)
             if inspect.iscoroutinefunction(func):
-                # Directly await the coroutine
-                result = await func(*processed_args)
+                result = await func(*positional_args, **keyword_args)
             else:
-                result = func(*processed_args)
-            return {"type": "response", "message": "Function executed successfully.", "result": result}
+                result = func(*positional_args, **keyword_args)
+            await websocket.send(json.dumps({
+                "type": "response",
+                "message": "Function executed successfully.",
+                "result": result
+            }))
         except Exception as e:
-            return {"type": "response", "message": f"Error executing function '{func_name}': {e}"}
+            await websocket.send(json.dumps({
+                "type": "response",
+                "message": f"Error while executing '{func_name}': {e}"
+            }))
 
     async def send_packet(self, websocket, type, message):
         if websocket:
@@ -201,27 +255,54 @@ class WebSocketServer:
             "content": content
         }
         await websocket.send(json.dumps(response))
+        
+    async def specificator_function(self, websocket, message):
+        """
+        Обрабатывает сообщения, начинающиеся с '@'.
+        """
+        
+        if message.startswith('@get_logs'):
+            await self.send_packet(websocket=websocket, type='logs', message=self.plogging.get_history())
+        elif message.startswith('@get_archived_logs'):
+            parts = message.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                days = int(parts[1])
+                await self.get_archived_logs_for_period(websocket, days)
+            else:
+                response = {
+                    "type": "response",
+                    "message": "Invalid format for @get_archived_logs. Use '@get_archived_logs <days>'."
+                }
+                await websocket.send(json.dumps(response))
+        elif message.startswith('@get_log_file'):
+            parts = message.split()
+            if len(parts) == 3:
+                folder = parts[1]
+                filename = parts[2]
+                await self.send_log_file_content(websocket, folder, filename)
+        elif message.startswith('@registered_functions'):
+            await self.get_registered_functions(websocket)
+        else:
+            response = {"type": "error", "message": f"Unknown command @{message[1:]}."}
+            await websocket.send(json.dumps(response))
 
     async def handler(self, websocket):
-        # Get client address
         client_address = websocket.remote_address
         await self.plogging.info(f"New connection: {client_address}")
 
-        # Receive initial message from client indicating connection type
         try:
             initial_message = await websocket.recv()
             data = json.loads(initial_message)
-            connection_type = data.get('connection-type')
+            # Обработка начального сообщения в формате JSON
+            connection_type = data.get('arguments', {}).get('connection_type')
             if not connection_type:
                 await self.plogging.warn(f"Client {client_address} did not send connection type.")
                 await websocket.close()
                 return
-            # Store client info
             self.clients[websocket] = {
                 'address': client_address,
                 'connection_type': connection_type
             }
-            # Trigger on_connect signal
             if self.on_connect_callback:
                 self.on_connect_callback(client_address)
         except Exception as e:
@@ -232,40 +313,61 @@ class WebSocketServer:
         try:
             async for message in websocket:
                 await self.plogging.debug(f"Message received from {client_address}: {message}")
-                if message.startswith('@'):
-                    if message.startswith('@get_logs'):
-                        await self.send_packet(websocket=websocket, type='logs', message=self.plogging.get_history())
-                    elif message.startswith('@get_archived_logs'):
-                        parts = message.split()
-                        if len(parts) == 2 and parts[1].isdigit():
-                            days = int(parts[1])
-                            await self.get_archived_logs_for_period(websocket, days)
-                        else:
-                            response = {
-                                "type": "response",
-                                "message": "Invalid format for @get_archived_logs. Use '@get_archived_logs <days>'."
-                            }
-                            await websocket.send(json.dumps(response))
-                    elif message.startswith('@get_log_file'):
-                        parts = message.split()
-                        if len(parts) == 3:
-                            folder = parts[1]
-                            filename = parts[2]
-                            await self.send_log_file_content(websocket, folder, filename)
-                    elif message.startswith('@registered_functions'):
-                        await self.get_registered_functions(websocket)
-                    else:
-                        response = {"type": "error", "message": f"Unknown command @{message[1:]}."}
-                        await websocket.send(json.dumps(response))
-                elif message.startswith('/'):
-                    temp = message[1:].split()
-                    func_name = temp[0]
-                    arguments = temp[1:]
-                    response = await self.execute_func(func_name, arguments)
-                    await websocket.send(json.dumps(response))
+                try:
+                    data = json.loads(message)
+                except Exception as e:
+                    await self.plogging.error(f"Error parsing JSON from {client_address}: {e}")
+                    continue
+
+                # Обработка запроса по полю "request"
+                request = data.get("request")
+                arguments = data.get("arguments", {})
+
+                if request:
+                    match request:
+                        case "GET_LOGS":
+                            await self.send_packet(websocket, 'logs', self.plogging.get_history())
+                        case "GET_ARCHIVED_LOGS":
+                            days = arguments.get("days")
+                            if isinstance(days, int):
+                                await self.get_archived_logs_for_period(websocket, days)
+                            else:
+                                await websocket.send(json.dumps({
+                                    "type": "response",
+                                    "message": "Invalid argument for GET_ARCHIVED_LOGS."
+                                }))
+                        case "GET_LOG_FILE":
+                            folder = arguments.get("folder")
+                            filename = arguments.get("filename")
+                            if folder and filename:
+                                await self.send_log_file_content(websocket, folder, filename)
+                            else:
+                                await websocket.send(json.dumps({
+                                    "type": "response",
+                                    "message": "Invalid arguments for GET_LOG_FILE."
+                                }))
+                        case "REGISTERED_FUNCTIONS":
+                            await self.get_registered_functions(websocket)
+                        case "SLASH_COMMAND":
+                            # Если запрос на вызов функции, ожидаем поле "command" внутри аргументов
+                            func_command = arguments.get("command")
+                            if func_command:
+                                await self.execute_func(func_command, websocket)
+                            else:
+                                await websocket.send(json.dumps({
+                                    "type": "response",
+                                    "message": "Missing 'command' in CALL_FUNCTION request."
+                                }))
+                        case _:
+                            await websocket.send(json.dumps({
+                                "type": "error",
+                                "message": f"Unknown request: {request}"
+                            }))
                 else:
-                    response = {"type": "error", "message": "Error: Command should start with '/' or '@'."}
-                    await websocket.send(json.dumps(response))
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "message": "Invalid message format: missing 'request' field."
+                    }))
         except websockets.exceptions.ConnectionClosed as e:
             await self.plogging.warn(f"Connection closed: {client_address}, reason: {e.code} - {e.reason}")
         except Exception as e:
