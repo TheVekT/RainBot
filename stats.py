@@ -1,5 +1,5 @@
 import disnake
-from disnake.ext import tasks
+from disnake.ext import tasks, commands
 import os
 import asyncio
 import sqlite3
@@ -491,3 +491,27 @@ class StatisticsTracker:
         self.clean_old_stats.cancel()
         self.compress_stats.cancel()
         self.user_states.clear()
+
+    def get_all_users(self) -> dict:
+        """
+        Возвращает словарь всех пользователей сервера self.guild_id.
+        Ключ — ID пользователя, значение — словарь с данными:
+        - 'nickname': имя пользователя,
+        - 'avatar_url': ссылка на аватар,
+        - 'status': состояние, определённое функцией get_member_state.
+        """
+        # Если объект guild ещё не сохранён, пытаемся получить его по guild_id
+        guild = self.guild if hasattr(self, 'guild') and self.guild else self.bot.get_guild(self.guild_id)
+        if guild is None:
+            return {}
+
+        users_data = {}
+        for member in guild.members:
+            # Получаем аватар. Для новых версий дискорда можно использовать member.display_avatar.url
+            avatar_url = member.display_avatar.url if member.display_avatar else None
+            users_data[str(member.id)] = {
+                'nickname': member.name,
+                'avatar_url': avatar_url,
+                'status': get_member_state(member)
+            }
+        return users_data

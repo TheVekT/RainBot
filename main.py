@@ -54,7 +54,7 @@ async def on_ready():
     rain = RainParser(plogging=plogging)
     if rain.bot is None:
         rain.connect_bot(bot)
-    server = WebSocketServer(host='192.168.0.106', plogging=plogging)
+    server = WebSocketServer(host='192.168.0.106', plogging=plogging, stats=stats)
 
     teleg_bot = TelegramBot("7735469957:AAFy32OcscWXQMocmN8ZdgkcqCsGP9iWrio", rain, plogging=plogging)
     teleg_bot.connect_discord_module(stats)

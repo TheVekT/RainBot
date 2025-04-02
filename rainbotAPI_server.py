@@ -2,13 +2,15 @@ import asyncio
 import websockets
 import json
 from plogging import Plogging
+from stats import StatisticsTracker
 import inspect
 import os
 import gzip
 import datetime
 
 class WebSocketServer:
-    def __init__(self, host='192.168.0.106', port=8765, plogging: Plogging | None = None):
+    def __init__(self, host='192.168.0.106', port=8765, plogging: Plogging | None = None, stats: StatisticsTracker | None = None):
+        self.stats = stats
         self.plogging = Plogging() if plogging is None else plogging
         self.plogging.on_log_message.connect(self._send_new_log_message)
         self.host = host
@@ -358,6 +360,21 @@ class WebSocketServer:
                                     "type": "response",
                                     "message": "Missing 'command' in CALL_FUNCTION request."
                                 }))
+                        case "GET_DISCORD_MEMBERS":
+                            data = self.stats.get_all_users()
+                            await self.send_packet(websocket, 'discord_members', data)
+                        case "GET_DISCORD_MEMBER_STAT":
+                            date = arguments.get("date")
+                            user_id = arguments.get("member_id")
+                            timelined_stat = self.stats.get_user_timeline(user_id=user_id, day=date)
+                            if timelined_stat is None:
+                                timelined_stat = "No data available"
+                            total_date_stat = self.stats.get_user_stats(user_id=user_id, day=date)
+                            if total_date_stat is None:
+                                total_date_stat = "No data available"
+                            responce_data = {"timeline": timelined_stat, "total": total_date_stat}
+                            await self.send_packet(websocket, 'discord_member_stat', responce_data)
+                            
                         case _:
                             await websocket.send(json.dumps({
                                 "type": "error",
