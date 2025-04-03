@@ -46,7 +46,7 @@ class WebSocketServer:
         Поддерживает два вида передачи аргументов:
         
         1. Именованные аргументы в формате:
-            --arg:"Текст с пробелами"
+            --arg="Текст с пробелами"
         2. Позиционные аргументы (без префикса), например:
             /function_name 10 20
         
@@ -71,9 +71,9 @@ class WebSocketServer:
             # Обрабатываем оставшиеся токены
             for token in tokens[1:]:
                 # Если токен начинается с '--' и содержит двоеточие, считаем его именованным аргументом
-                if token.startswith('--') and ':' in token:
+                if token.startswith('--') and '=' in token:
                     # Убираем префикс '--' и разделяем по первому двоеточию
-                    arg_key, arg_value = token[2:].split(':', 1)
+                    arg_key, arg_value = token[2:].split('=', 1)
                     # Если значение состоит только из цифр, преобразуем в int
                     if arg_value.isdigit():
                         arg_value = int(arg_value)

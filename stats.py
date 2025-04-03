@@ -6,7 +6,6 @@ import sqlite3
 from datetime import datetime, timedelta, date
 from plogging import Plogging
 
-
 def get_member_state(member: disnake.Member) -> str:
     """Determine the current state of a member."""
     if member.status is disnake.Status.offline:
@@ -23,46 +22,39 @@ def get_member_state(member: disnake.Member) -> str:
         else:
             return "voice_online"
     else:
-        # Member is online but not in voice
         return "online"
-
 
 class StatisticsTracker:
     def __init__(self, bot, guild_id, db_path="stats/stats.db", retention_days=7, plogging: Plogging | None = None):
-        self.bot = bot
+        self.bot: commands.Bot = bot
         self.plogging = Plogging() if plogging is None else plogging
-        self.guild_id = guild_id  # ID of the server to track
-        self.retention_days = retention_days  # Number of days to retain statistics
-        self.user_states = {}  # Tracks the current state of users
+        self.guild_id = guild_id
+        self.retention_days = retention_days
+        self.user_states = {}  # {user_id: {"state": str, "start_time": ISO string}}
 
-        # Ensure the stats directory exists
         stats_dir = os.path.dirname(db_path)
         if stats_dir and not os.path.exists(stats_dir):
             os.makedirs(stats_dir)
-
         self.db_path = db_path
-        # (Новая основная таблица не используется, теперь данные будут в партициях)
-        self.init_db_master()  # можно оставить для общих настроек БД
-
+        self.init_db_master()
         self._start()
 
     def _start(self):
         asyncio.create_task(self.on_ready())
+        # Запускаем задачу периодической фиксации текущего состояния (каждые 10 минут)
+        self.periodic_state_fixation.start()
 
     def init_db_master(self):
-        """Выполняем общие настройки БД (PRAGMA и т.п.)."""
         conn = sqlite3.connect(self.db_path)
-        conn.execute("PRAGMA journal_mode=WAL;")  
+        conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=FULL;")
         conn.commit()
         conn.close()
 
     def _get_partition_table(self, dt: datetime) -> str:
-        """Возвращает имя таблицы для заданной даты (по start_time)."""
         return "user_states_" + dt.strftime("%Y_%m_%d")
 
     def _ensure_partition_table(self, conn, table_name: str):
-        """Создаёт таблицу-партицию, если её ещё нет, а также нужные индексы."""
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +80,6 @@ class StatisticsTracker:
             self.compress_stats.start()
 
     async def update_user_state(self, member):
-        """Update the state of a member."""
         user_id = str(member.id)
         current_state = get_member_state(member)
         now = datetime.now().isoformat()
@@ -98,25 +89,27 @@ class StatisticsTracker:
             start_time = previous_state_info["start_time"]
         else:
             previous_state = None
-            start_time = now  # Assume the state started now
+            start_time = now
         if current_state != previous_state:
-            if previous_state is not None:
-                await self.record_state_period(user_id, member.name, previous_state, start_time, now)
-            else:
-                await self.record_state_period(user_id, member.name, current_state, start_time, now)
-            self.user_states[user_id] = {
-                "state": current_state,
-                "start_time": now
-            }
+            # Если состояние изменилось, записываем период для старого состояния
+            await self.record_state_period(user_id, member.name, previous_state if previous_state is not None else current_state, start_time, now)
+            self.user_states[user_id] = {"state": current_state, "start_time": now}
 
     async def record_state_period(self, user_id, user_name, state, start_time, end_time):
-        """Записывает период состояния для пользователя в соответствующую таблицу-партицию."""
+        """Записывает период состояния, разбивая его по границам дней, если необходимо."""
         try:
-            # Определяем дату по start_time
-            dt = datetime.fromisoformat(start_time)
-            table_name = self._get_partition_table(dt)
+            dt_start = datetime.fromisoformat(start_time)
+            dt_end = datetime.fromisoformat(end_time)
+        except Exception as e:
+            await self.plogging.warn(f"Invalid datetime format for user {user_id}: {e}")
+            return
+
+        # Если период пересекает границу дня, разбиваем его
+        if dt_start.date() != dt_end.date():
+            await self.record_period_split(user_id, user_name, state, dt_start, dt_end)
+        else:
+            table_name = self._get_partition_table(dt_start)
             conn = sqlite3.connect(self.db_path)
-            # Создаем таблицу-партицию, если не существует
             self._ensure_partition_table(conn, table_name)
             conn.execute(f"""
                 INSERT INTO {table_name} (user_id, user_name, state, start_time, end_time)
@@ -124,16 +117,40 @@ class StatisticsTracker:
             """, (user_id, user_name, state, start_time, end_time))
             conn.commit()
             conn.close()
-        except Exception as e:
-            await self.plogging.warn(f"Error recording state period for user {user_id}: {e}")
+
+    async def record_period_split(self, user_id, user_name, state, dt_start, dt_end):
+        """Разбивает период, пересекающий границу дня, на несколько записей."""
+        conn = sqlite3.connect(self.db_path)
+        while dt_start.date() < dt_end.date():
+            table_name = self._get_partition_table(dt_start)
+            self._ensure_partition_table(conn, table_name)
+            # Конец дня: 23:59:59
+            end_of_day = datetime.combine(dt_start.date(), datetime.max.time())
+            # Если разница меньше секунды, пропускаем
+            if end_of_day < dt_start:
+                break
+            conn.execute(f"""
+                INSERT INTO {table_name} (user_id, user_name, state, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, user_name, state, dt_start.isoformat(), end_of_day.isoformat()))
+            await self.plogging.debug(f"Splitting period for user {user_id}: {dt_start.isoformat()} -> {end_of_day.isoformat()}")
+            dt_start = datetime.combine(dt_start.date() + timedelta(days=1), datetime.min.time())
+        # Последняя часть
+        table_name = self._get_partition_table(dt_start)
+        self._ensure_partition_table(conn, table_name)
+        conn.execute(f"""
+            INSERT INTO {table_name} (user_id, user_name, state, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, user_name, state, dt_start.isoformat(), dt_end.isoformat()))
+        await self.plogging.debug(f"Final split period for user {user_id}: {dt_start.isoformat()} -> {dt_end.isoformat()}")
+        conn.commit()
+        conn.close()
 
     def find_member(self, nickname: str) -> disnake.Member:
-        """Find a discord member by nickname."""
         return self.guild.get_member_named(nickname)
 
     @tasks.loop(seconds=3)
     async def periodic_stats_update(self):
-        """Периодическая задача для обновления статистики пользователей, выполняющая обновление параллельно."""
         guild = self.bot.get_guild(self.guild_id)
         if not guild:
             await self.plogging.error(f"Guild with ID {self.guild_id} not found.")
@@ -141,14 +158,31 @@ class StatisticsTracker:
         tasks_list = [self.update_user_state(member) for member in guild.members]
         await asyncio.gather(*tasks_list, return_exceptions=True)
 
+    @tasks.loop(minutes=10)
+    async def periodic_state_fixation(self):
+        """
+        Периодически фиксирует текущее состояние пользователей, даже если оно не изменилось.
+        Это помогает «сбросить» период, чтобы гарантировать запись активного состояния.
+        """
+        now = datetime.now().isoformat()
+        await self.plogging.debug("Fixing stats periods")
+        for user_id, state_info in self.user_states.items():
+            # Фиксируем период, если прошло более 10 минут с последней записи
+            last_time = datetime.fromisoformat(state_info["start_time"])
+            if (datetime.now() - last_time) >= timedelta(minutes=10):
+                member = self.guild.get_member(int(user_id))
+                user_name = member.name if member else "Unknown"
+                await self.record_state_period(user_id, user_name, state_info["state"], state_info["start_time"], now)
+                # Обновляем стартовую точку до текущего времени
+                self.user_states[user_id]["start_time"] = now
+                await self.plogging.debug(f"Periodic fixation for user {user_id}: fixed up to {now}")
+
     @tasks.loop(hours=1)
     async def clean_old_stats(self):
-        """Удаляет старые статистические данные из всех партиций."""
         cutoff_date = datetime.now() - timedelta(days=self.retention_days)
         cutoff_iso = cutoff_date.isoformat()
         try:
             conn = sqlite3.connect(self.db_path)
-            # Получаем список таблиц-партиций по шаблону
             cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'user_states_%'")
             tables = [row[0] for row in cur.fetchall()]
             for table in tables:
@@ -161,14 +195,16 @@ class StatisticsTracker:
     @tasks.loop(minutes=10)
     async def compress_stats(self):
         """
-        Сжимает записи внутри каждой партиции: сливает подряд идущие периоды
-        для одного пользователя, если разница между ними не превышает 1 секунды.
+        Сжимает записи внутри каждой партиции, объединяя подряд идущие периоды одного пользователя,
+        если разница между ними не превышает 1 секунды. Вся операция обёрнута в транзакцию.
+        Добавлено подробное логирование.
         """
         try:
             conn = sqlite3.connect(self.db_path)
             cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'user_states_%'")
             tables = [row[0] for row in cur.fetchall()]
             for table in tables:
+                await self.plogging.debug(f"Compressing table {table}")
                 rows = conn.execute(f"""
                     SELECT id, user_id, user_name, state, start_time, end_time
                     FROM {table}
@@ -189,13 +225,15 @@ class StatisticsTracker:
                         gap = (r['start_time'] - prev['end_time']).total_seconds()
                         if gap <= 1:
                             prev['end_time'] = r['end_time']
+                            await self.plogging.debug(f"Merged with previous: new end_time = {prev['end_time'].isoformat()}")
                             continue
                     if prev:
                         merged.append(prev)
                     prev = r
                 if prev:
                     merged.append(prev)
-                # Перезаписываем данные в текущей партиции
+                # Оборачиваем операцию в транзакцию
+                conn.execute("BEGIN TRANSACTION")
                 conn.execute(f"DELETE FROM {table}")
                 for m in merged:
                     conn.execute(f"""
@@ -204,25 +242,13 @@ class StatisticsTracker:
                     """, (m['user_id'], m['user_name'], m['state'],
                           m['start_time'].isoformat(), m['end_time'].isoformat()))
                 conn.commit()
+                await self.plogging.debug(f"Table {table} compressed: {len(merged)} records saved.")
             conn.close()
         except Exception as e:
             await self.plogging.error(f"Error in compress_stats: {e}")
 
     def get_user_timeline(self, user_id, day='previous'):
-        """
-        Возвращает скомпрессированные записи периодов (таймлайн) для заданного пользователя за указанный день.
-        Результат имеет формат:
-        {
-            'name': <имя пользователя>,
-            'timeline': [ 
-                {'state': <state>, 'start_time': <ISO>, 'end_time': <ISO>},
-                ...
-            ]
-        }
-        Если данных за указанный день нет, возвращается None.
-        """
         try:
-            # Преобразуем параметр day в список дат (ожидается только один день)
             if day == 'today':
                 date_list = [datetime.now().date()]
             elif day == 'previous':
@@ -237,11 +263,9 @@ class StatisticsTracker:
         except (ValueError, TypeError):
             return None
 
-        # Берем первый (единственный) день
         target_date = date_list[0]
         day_start = datetime.combine(target_date, datetime.min.time())
         day_end = datetime.combine(target_date, datetime.max.time())
-        # Ограничиваем текущим временем, если выбран сегодня
         if target_date == datetime.now().date():
             now = datetime.now()
             if day_end > now:
@@ -252,13 +276,11 @@ class StatisticsTracker:
         conn = sqlite3.connect(self.db_path)
         try:
             table_name = self._get_partition_table(day_start)
-            # Проверяем наличие таблицы для данного дня
             cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
             if not cur.fetchone():
                 conn.close()
                 return None
 
-            # Выбираем записи для данного пользователя, охватывающие выбранный день
             rows = conn.execute(f"""
                 SELECT user_name, state, start_time, end_time
                 FROM {table_name}
@@ -297,12 +319,10 @@ class StatisticsTracker:
                         'start_time': s_time,
                         'end_time': e_time
                     })
-
             if not periods:
                 conn.close()
                 return None
 
-            # Формируем timeline с заполнением промежутков (offline)
             timeline = []
             current_time = day_start
             for period in periods:
@@ -312,7 +332,6 @@ class StatisticsTracker:
                         'start_time': current_time.isoformat(),
                         'end_time': period['start_time'].isoformat()
                     })
-                # Если предыдущий период имеет то же состояние и разрыв менее 1 секунды, объединяем их
                 if timeline and timeline[-1]['state'] == period['state']:
                     prev_end = datetime.fromisoformat(timeline[-1]['end_time'])
                     gap = (period['start_time'] - prev_end).total_seconds()
@@ -343,12 +362,7 @@ class StatisticsTracker:
             conn.close()
             return None
 
-        
     def get_user_stats(self, user_id, day='previous'):
-        """
-        Получает статистику пользователя за заданный день или диапазон дней.
-        Данные выбираются из соответствующих таблиц-партиций.
-        """
         try:
             if day == 'today':
                 date_list = [datetime.now().date()]
@@ -394,7 +408,6 @@ class StatisticsTracker:
                     if day_end > now:
                         day_end = now
                 table_name = self._get_partition_table(day_start)
-                # Проверяем наличие таблицы
                 cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
                 if not cur.fetchone():
                     continue
@@ -402,7 +415,7 @@ class StatisticsTracker:
                     SELECT user_name, state, start_time, end_time
                     FROM {table_name}
                     WHERE user_id = ?
-                    AND ((start_time <= ? AND end_time >= ?) 
+                    AND ((start_time <= ? AND end_time >= ?)
                         OR (start_time >= ? AND start_time <= ?))
                 """, (
                     str(user_id),
@@ -447,9 +460,6 @@ class StatisticsTracker:
         return {'name': user_name, 'days': stats}
 
     def process_periods(self, single_date, periods):
-        """
-        Заполняет пропуски состоянием 'offline' и суммирует время.
-        """
         day_start = datetime.combine(single_date, datetime.min.time())
         day_end = datetime.combine(single_date, datetime.max.time())
         periods.sort(key=lambda x: x['start_time'])
@@ -479,7 +489,6 @@ class StatisticsTracker:
         return total_times_formatted
 
     def stop(self):
-        """Останавливает сбор статистики и сохраняет оставшиеся данные."""
         now = datetime.now().isoformat()
         for user_id, state_info in self.user_states.items():
             current_state = state_info['state']
@@ -490,24 +499,15 @@ class StatisticsTracker:
         self.periodic_stats_update.cancel()
         self.clean_old_stats.cancel()
         self.compress_stats.cancel()
+        self.periodic_state_fixation.cancel()
         self.user_states.clear()
 
     def get_all_users(self) -> dict:
-        """
-        Возвращает словарь всех пользователей сервера self.guild_id.
-        Ключ — ID пользователя, значение — словарь с данными:
-        - 'nickname': имя пользователя,
-        - 'avatar_url': ссылка на аватар,
-        - 'status': состояние, определённое функцией get_member_state.
-        """
-        # Если объект guild ещё не сохранён, пытаемся получить его по guild_id
         guild = self.guild if hasattr(self, 'guild') and self.guild else self.bot.get_guild(self.guild_id)
         if guild is None:
             return {}
-
         users_data = {}
         for member in guild.members:
-            # Получаем аватар. Для новых версий дискорда можно использовать member.display_avatar.url
             avatar_url = member.display_avatar.url if member.display_avatar else None
             users_data[str(member.id)] = {
                 'nickname': member.name,
