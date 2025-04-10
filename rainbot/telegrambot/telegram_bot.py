@@ -2,18 +2,19 @@ from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMar
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
 import sqlite3
 import asyncio
-from plogging import Plogging
-from stats import get_member_state
+from rainbot.utils import Plogging
+from rainbot.utils.stats import get_member_state
+from rainbot.discordbot import RainParser
 
 # Define states for the conversation
 SET_THRESHOLD, GET_THRESHOLD, GET_DISCORD_NICK = range(3)
 
 class TelegramBot:
-    def __init__(self, token, rainparser, plogging: Plogging | None = None):
+    def __init__(self, token, rainparser: RainParser, plogging: Plogging | None = None):
         self.token = token
         self.application = Application.builder().token(token).build()
         self.rain = rainparser
-        self.conn = sqlite3.connect('telegram-users.db')
+        self.conn = sqlite3.connect('data/telegram-users.db')
         self.cursor = self.conn.cursor()
         self.create_table()
         self.register_handlers()

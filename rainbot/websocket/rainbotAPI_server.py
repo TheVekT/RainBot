@@ -1,8 +1,7 @@
 import asyncio
 import websockets
 import json
-from plogging import Plogging
-from stats import StatisticsTracker
+from rainbot.utils import Plogging, StatisticsTracker
 import inspect
 import os
 import gzip

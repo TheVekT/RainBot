@@ -4,7 +4,7 @@ import os
 import asyncio
 import sqlite3
 from datetime import datetime, timedelta, date
-from plogging import Plogging
+from rainbot.utils import Plogging
 
 def get_member_state(member: disnake.Member) -> str:
     """Determine the current state of a member."""
