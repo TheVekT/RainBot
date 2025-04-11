@@ -170,7 +170,7 @@ class TelegramBot:
         """Starts the rain event."""
         self.active_events.clear()
 
-    def on_rain_end(self):
+    def on_rain_end(self, *args):
         """Ends the rain event. Closes all active user events."""
         self.active_events.clear()
 

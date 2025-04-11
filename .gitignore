@@ -6,4 +6,5 @@ test_bot.py
 RAINstart.lnk
 RainStart.bat
 data/
-secrets/
+telegram_token.txt
+discord_token.txt

@@ -223,7 +223,7 @@ class RainParser:
             
             
             
-    async def edit_last_message(self, msg: disnake.Message):
+    async def edit_last_message(self, msg: disnake.Message, number):
         """Edits the last rain notification message with updated scrap data.
 
         Args:
@@ -233,7 +233,6 @@ class RainParser:
             # Здесь можно не получать канал заново, если msg уже содержит нужную информацию
             if msg.author == self.bot.user:
                 await self.plogging.debug(f"Editing message... | message id : {msg.id}")
-                number = await self._scrap_check()
                 embed = disnake.Embed(
                     title="🌧  Rakeback Rain NOW!!!  🌧",
                     description=f"**$ {number}**",
@@ -343,7 +342,7 @@ class RainParser:
                     if scrap is not None:
                         self.rain_scrap.emit(str_to_float(scrap))
                         await self.plogging.debug("try to edit last message...")
-                        await self.edit_last_message(message)
+                        await self.edit_last_message(message, scrap)
                         await asyncio.sleep(5)
                     else:
                         self.rain_end.emit(old_scrap, old_count)
