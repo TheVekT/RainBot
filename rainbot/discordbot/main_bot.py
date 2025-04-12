@@ -3,7 +3,7 @@ import datetime
 import asyncio
 from rainbot.websocket import WebSocketServer
 from disnake.ext import commands, tasks
-from rainbot.utils import StatisticsTracker, ConfigManager, Plogging
+from rainbot.utils import StatisticsTracker, ConfigManager, Plogging, RainStats
 from rainbot.telegrambot import TelegramBot
 from rainbot.discordbot import RainParser, PlaySoundOnBot
 from rainbot import DISCORD_TOKEN, TELEGRAM_TOKEN
@@ -42,12 +42,13 @@ async def restarting_browser():
 
 @bot.event
 async def on_ready():
-    global cdown, sound, rain, stats, teleg_bot
+    global cdown, sound, rain, stats, teleg_bot, rain_stats
     cdown = ConfigManager(plogging=plogging)
     await cdown.create_config()
     stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=700, plogging=plogging)
     sound = PlaySoundOnBot(bot, plogging=plogging)
     rain = RainParser(plogging=plogging)
+    rain_stats = RainStats(rain, plogging=plogging)
     if rain.bot is None:
         rain.connect_bot(bot)
     server = WebSocketServer(host='192.168.0.106', plogging=plogging, stats=stats)

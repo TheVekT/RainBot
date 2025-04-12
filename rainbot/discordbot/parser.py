@@ -177,8 +177,7 @@ class RainParser:
         """
         try:
             event_data = await self._get_event_data()
-            if event_data is not None and "event" in event_data.lower():
-                    
+            if event_data is not None and "event" in event_data.lower():  
                 #match = re.search(r'share\s(\d{1,3}(?:,\d{3})*,\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488,56
                 
                 match = re.search(r'share\s(\d{1,3}(?:,\d{3})*\.\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488.56

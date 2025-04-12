@@ -25,6 +25,12 @@ def get_member_state(member: disnake.Member) -> str:
         return "online"
 
 class StatisticsTracker:
+    """
+    StatisticsTracker is a class that monitors and records the states of users in a Discord server.
+    It logs transitions such as online, offline, and various voice channel statuses (like muted or deafened),
+    along with corresponding timestamps. This data is stored in a partitioned SQLite database, and the class
+    periodically updates user states for further analysis and reporting.
+    """
     def __init__(self, bot, guild_id, db_path="stats/stats.db", retention_days=7, plogging: Plogging | None = None):
         self.bot: commands.Bot = bot
         self.plogging = Plogging() if plogging is None else plogging
@@ -515,3 +521,69 @@ class StatisticsTracker:
                 'status': get_member_state(member)
             }
         return users_data
+
+
+
+
+class RainStats:
+    def __init__(self, rainparser, plogging: Plogging | None = None, db_path: str = "stats/rain_stats.db"):
+        self.rainparser = rainparser
+        self.plogging = Plogging() if plogging is None else plogging
+        self.rainparser.rain_end.connect(lambda scrap_amount, user_count: asyncio.create_task(self.on_rain_end(scrap_amount, user_count)))
+        self.db_path = db_path
+        self.init_db()
+        self.clean_old_stats.start()
+
+    def init_db(self):
+        """Инициализирует базу данных и создает необходимые таблицы."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=FULL;")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rain_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scrap_amount REAL NOT NULL,
+                user_count INTEGER NOT NULL,
+                time TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rain_stats_time ON rain_stats(time)")
+        conn.commit()
+        conn.close()
+
+    async def on_rain_end(self, scrap_amount: str, user_count: int):
+        """Обработчик сигнала окончания рейна."""
+        try:
+            now = datetime.now().isoformat()
+            
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("""
+                INSERT INTO rain_stats (scrap_amount, user_count, time)
+                VALUES (?, ?, ?)
+            """, (float(scrap_amount.replace(',', '')), user_count, now))
+            conn.commit()
+            conn.close()
+            
+            await self.plogging.debug(f"Recorded rain stats: {scrap_amount} scrap, {user_count} users")
+        except Exception as e:
+            await self.plogging.error(f"Error recording rain stats: {e}")
+
+    @tasks.loop(hours=24)
+    async def clean_old_stats(self):
+        """Очищает статистику старше 90 дней."""
+        try:
+            cutoff_date = (datetime.now() - timedelta(days=90)).isoformat()
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("DELETE FROM rain_stats WHERE time < ?", (cutoff_date,))
+            conn.commit()
+            conn.close()
+            await self.plogging.debug("Cleaned old rain stats")
+        except Exception as e:
+            await self.plogging.error(f"Error cleaning old rain stats: {e}")
+
+    def stop(self):
+        """Останавливает все задачи."""
+        self.clean_old_stats.cancel()
+
+    
+    
