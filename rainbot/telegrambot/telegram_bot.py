@@ -198,12 +198,17 @@ class TelegramBot:
 
                 # Proceed to send/update the Telegram message
                 if user_id not in self.active_events:
-                    # Send the first message to the user
-                    message = await self.application.bot.send_message(
-                        chat_id=user_id,
-                        text=f"🌧️ Rakeback Rain NOW!!! 🌧️\n\n$ {num:.2f}"
-                    )
-                    self.active_events[user_id] = message
+                    try:
+                        # Send the first message to the user
+                        message = await self.application.bot.send_message(
+                            chat_id=user_id,
+                            text=f"🌧️ Rakeback Rain NOW!!! 🌧️\n\n$ {num:.2f}"
+                        )
+                        self.active_events[user_id] = message
+                    except error.Forbidden:
+                        # If the bot is blocked by the user, remove them from the database
+                        self.cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+                        self.conn.commit()
                 else:
                     # Update the message
                     message = self.active_events[user_id]
