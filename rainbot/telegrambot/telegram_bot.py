@@ -20,7 +20,6 @@ class TelegramBot:
         self.register_handlers()
         self.init_connectors()
         self.active_events = {}  # Stores active user messages
-        self.set_commands()
         self.plogging = Plogging() if plogging is None else plogging
         
     def connect_discord_module(self, module):
@@ -43,25 +42,28 @@ class TelegramBot:
         self.conn.commit()
     
     def register_handlers(self):
-        """Registers the bot's command handlers."""
-        self.application.add_handler(CommandHandler('start', self.start))
-        # Remove or comment out the following line
-        # self.application.add_handler(CommandHandler('set', self.set_threshold))
-        
-        # Conversation handler for setting threshold
-        threshold_conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('set', self.set_threshold)],
-            states={
-                GET_THRESHOLD: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.get_threshold)]
-            },
-            fallbacks=[CommandHandler('cancel', self.cancel)]
-        )
-        self.application.add_handler(threshold_conv_handler)
+        try:
+            """Registers the bot's command handlers."""
+            self.application.add_handler(CommandHandler('start', self.start))
+            # Remove or comment out the following line
+            # self.application.add_handler(CommandHandler('set', self.set_threshold))
+            
+            # Conversation handler for setting threshold
+            threshold_conv_handler = ConversationHandler(
+                entry_points=[CommandHandler('set', self.set_threshold)],
+                states={
+                    GET_THRESHOLD: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.get_threshold)]
+                },
+                fallbacks=[CommandHandler('cancel', self.cancel)]
+            )
+            self.application.add_handler(threshold_conv_handler)
 
-        # Add handlers for discord connection
-        self.application.add_handler(CommandHandler('discord', self.discord_command))
-        self.application.add_handler(CallbackQueryHandler(self.handle_callback))
-        self.application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, self.get_discord_nick))
+            # Add handlers for discord connection
+            self.application.add_handler(CommandHandler('discord', self.discord_command))
+            self.application.add_handler(CallbackQueryHandler(self.handle_callback))
+            self.application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, self.get_discord_nick))
+        except Exception as e:
+            self.plogging.error(f"Error registering handlers: {e}")
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handler for the /start command."""
@@ -218,22 +220,44 @@ class TelegramBot:
                         pass
                     
     async def start_polling(self):
-        """Asynchronously starts the bot in polling mode."""
-        await self.application.initialize()  # Initialize the application
-        await self.application.start()  # Start the bot in the existing event loop
-        await self.application.updater.start_polling()  # Start polling
-        await self.plogging.info("Telegram bot successfully started")  # Logging for debugging
+        try:
+            """Asynchronously starts the bot in polling mode."""
+            await asyncio.sleep(1)  # Small delay to ensure the bot is ready
+            await self.set_commands()  # Ensure commands are set before starting polling
+            await self._safe_initialize()  # Ensure the bot is initialized before starting polling
+            await self.application.start()  # Start the bot in the existing event loop
+            await self.application.updater.start_polling()  # Start polling
+            await self.plogging.info("Telegram bot successfully started")  # Logging for debugging
+        except Exception as e:
+            await self.plogging.error(f"Error starting Telegram bot: {e}")
 
     async def stop(self):
         """Stops the bot and closes the database connection."""
         await self.application.stop()
         self.conn.close()
             
-    def set_commands(self):
-        """Sets the bot's commands with descriptions."""
-        commands = [
-            BotCommand("start", "Start interacting with the bot."),
-            BotCommand("set", "Set the threshold for rain notifications."),
-            BotCommand("discord", "Edit your discord integration settings.")
-        ]
-        asyncio.create_task(self.application.bot.set_my_commands(commands))
+    async def set_commands(self):
+        try:
+            """Sets the bot's commands with descriptions."""
+            commands = [
+                BotCommand("start", "Start interacting with the bot."),
+                BotCommand("set", "Set the threshold for rain notifications."),
+                BotCommand("discord", "Edit your discord integration settings.")
+            ]
+            await self.application.bot.set_my_commands(commands)
+        except Exception as e:
+            await self.plogging.error(f"Error setting commands: {e}")
+        
+    async def _safe_initialize(self, retries: int = 3, delay: int = 5):
+        for attempt in range(1, retries + 1):
+            try:
+                await self.application.initialize()
+                await self.plogging.info("Telegram bot initialized successfully")
+                return
+            except error.TimedOut:
+                if attempt < retries:
+                    await self.plogging.warn(f"initialize timed out, retry {attempt}/{retries} in {delay}s")
+                    await asyncio.sleep(delay)
+                else:
+                    await self.plogging.error(f"initialize failed after {retries} attempts")
+                    raise

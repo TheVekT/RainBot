@@ -526,13 +526,15 @@ class StatisticsTracker:
 
 
 class RainStats:
-    def __init__(self, rainparser, plogging: Plogging | None = None, db_path: str = "stats/rain_stats.db"):
+    def __init__(self, rainparser, plogging: Plogging | None = None, db_path: str = "stats/rain_stats.db", retention_days: int = 90):
+        
         self.rainparser = rainparser
         self.plogging = Plogging() if plogging is None else plogging
         self.rainparser.rain_end.connect(lambda scrap_amount, user_count: asyncio.create_task(self.on_rain_end(scrap_amount, user_count)))
         self.db_path = db_path
         self.init_db()
         self.clean_old_stats.start()
+        self.retention_days = 90
 
     def init_db(self):
         """Инициализирует базу данных и создает необходимые таблицы."""
@@ -570,9 +572,9 @@ class RainStats:
 
     @tasks.loop(hours=24)
     async def clean_old_stats(self):
-        """Очищает статистику старше 90 дней."""
+        """Очищает статистику старше X дней."""
         try:
-            cutoff_date = (datetime.now() - timedelta(days=90)).isoformat()
+            cutoff_date = (datetime.now() - timedelta(days=self.retention_days)).isoformat()
             conn = sqlite3.connect(self.db_path)
             conn.execute("DELETE FROM rain_stats WHERE time < ?", (cutoff_date,))
             conn.commit()

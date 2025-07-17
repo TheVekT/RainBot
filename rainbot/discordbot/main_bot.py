@@ -48,7 +48,7 @@ async def on_ready():
     stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=700, plogging=plogging)
     sound = PlaySoundOnBot(bot, plogging=plogging)
     rain = RainParser(plogging=plogging)
-    rain_stats = RainStats(rain, plogging=plogging)
+    rain_stats = RainStats(rain, plogging=plogging, retention_days=365)
     if rain.bot is None:
         rain.connect_bot(bot)
     server = WebSocketServer(host='192.168.0.106', plogging=plogging, stats=stats)
