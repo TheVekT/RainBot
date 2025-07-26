@@ -402,5 +402,21 @@ class WebSocketServer:
                 await self.plogging.error(f"Server error: {e}")
                 await asyncio.sleep(5)
 
+    async def shutdown(self):
+        await self.plogging.debug("Shutting down WebSocket server...")
+        if self.server:
+            self.server.close()
+            try:
+                await asyncio.wait_for(self.server.wait_closed(), timeout=6)
+            except asyncio.TimeoutError:
+                await self.plogging.warn("Timeout waiting for server to close.")
+        for ws in list(self.clients.keys()):
+            try:
+                await ws.close(code=1001, reason="Server shutting down")
+            except Exception as e:
+                await self.plogging.error(f"Error closing websocket: {ws}, reason: {e}")
+
+
+            
     def run(self):
         asyncio.create_task(self.start())

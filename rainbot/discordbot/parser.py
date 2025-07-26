@@ -10,6 +10,7 @@ from disnake.ext import commands
 from bs4 import BeautifulSoup
 
 
+
 class RainParser:
     def __init__(self, plogging: Plogging | None = None):
         self.driver = None
@@ -116,13 +117,19 @@ class RainParser:
         self.driver = None
 
         await self.close_browsers()
-
+        
+        from selenium.common.exceptions import SessionNotCreatedException
         try:
             options = self.get_chrome_options()
             self.driver = uc.Chrome(options=options)  # Используем undetected_chromedriver
             self.driver.get(self.url)
             self.driver.implicitly_wait(5)
             self.restarting_browser = False
+            
+        except SessionNotCreatedException as e:
+            if "ChromeDriver only supports Chrome version" in str(e):
+                await self.plogging.error("ChromeDriver version mismatch. Please update ChromeDriver.")
+            
         except Exception as e:
             await self.plogging.error(f"An error occurred during browser restart: {e}")
 

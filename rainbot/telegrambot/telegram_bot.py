@@ -232,10 +232,21 @@ class TelegramBot:
             await self.plogging.error(f"Error starting Telegram bot: {e}")
 
     async def stop(self):
-        """Stops the bot and closes the database connection."""
+        """Stops the bot and closes all active connections and the database connection."""
+        await self.plogging.info("Stopping Telegram bot...")
         await self.application.stop()
+        try:
+            await self.application.shutdown()
+        except Exception as e:
+            await self.plogging.error(f"Error during application shutdown: {e}")
+        if hasattr(self.application.bot, "session") and self.application.bot.session:
+            try:
+                await self.application.bot.session.close()
+            except Exception as e:
+                await self.plogging.error(f"Error closing Telegram bot session: {e}")
+        self.active_events.clear()
         self.conn.close()
-            
+
     async def set_commands(self):
         try:
             """Sets the bot's commands with descriptions."""
@@ -254,10 +265,14 @@ class TelegramBot:
                 await self.application.initialize()
                 await self.plogging.info("Telegram bot initialized successfully")
                 return
+            except error.Conflict as e:
+                await self.plogging.error(f"Conflict error during initialization: {e}. " 
+                                          "Ensure that no other bot instance is running.")
+                raise  # Завершаем инициализацию, если уже есть другой экземпляр
             except error.TimedOut:
                 if attempt < retries:
-                    await self.plogging.warn(f"initialize timed out, retry {attempt}/{retries} in {delay}s")
+                    await self.plogging.warn(f"Initialize timed out, retry {attempt}/{retries} in {delay}s")
                     await asyncio.sleep(delay)
                 else:
-                    await self.plogging.error(f"initialize failed after {retries} attempts")
+                    await self.plogging.error(f"Initialize failed after {retries} attempts")
                     raise

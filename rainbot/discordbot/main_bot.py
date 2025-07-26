@@ -8,7 +8,7 @@ from rainbot.telegrambot import TelegramBot
 from rainbot.discordbot import RainParser, PlaySoundOnBot
 from rainbot import DISCORD_TOKEN, TELEGRAM_TOKEN
 
-
+bot_already_was_ready = False
 
 plogging = Plogging()
 plogging.set_websocket_settings(debug=False, error=False)
@@ -42,7 +42,11 @@ async def restarting_browser():
 
 @bot.event
 async def on_ready():
-    global cdown, sound, rain, stats, teleg_bot, rain_stats
+    global bot_already_was_ready
+    if bot_already_was_ready:
+        await plogging.info('Bot is already running, skipping RE-initialization.')
+        return
+    global cdown, sound, rain, stats, teleg_bot, rain_stats, server
     cdown = ConfigManager(plogging=plogging)
     await cdown.create_config()
     stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=700, plogging=plogging)
@@ -73,6 +77,7 @@ async def on_ready():
 
 
     await plogging.info('Bot is ready!')
+    bot_already_was_ready = True
 
 
 
@@ -487,12 +492,11 @@ async def stop():
         restarting_browser.stop()
     await rain.driver_quit()
     await rain.close_browsers()
+    await server.shutdown()
     await bot.close()
     await teleg_bot.stop()
     plogging.archive_logs()
     stats.stop()
-    import os
-    os.abort()
     
 async def restart():
     await plogging.info('RESTARTING main script...')
