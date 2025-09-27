@@ -14,8 +14,11 @@ class Signal:
 
     def emit(self, *args, **kwargs):
         """Вызывает все подключенные функции-обработчики."""
-        for slot in self._slots:
-            slot(*args, **kwargs)
+        try:
+            for slot in self._slots:
+                slot(*args, **kwargs)
+        except Exception as e:
+            print(f"Error in signal slot: {e}")
 
 
 class ConfigManager:
