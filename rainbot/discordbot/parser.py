@@ -85,11 +85,11 @@ class RainParser:
                         child.kill()
                         await self.plogging.debug(f"Terminated child process with PID: {child.pid}")
                     except Exception as e:
-                        await self.plogging.error(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
+                        await self.plogging.warn(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
                 process.kill()
                 await self.plogging.debug(f"Terminated process with PID: {pid}")
             except Exception as e:
-                await self.plogging.error(f"Failed to terminate process with PID: {pid}, error: {e}")
+                await self.plogging.warn(f"Failed to terminate process with PID: {pid}, error: {e}")
 
         for proc in chrome_processes:
             await terminate_process_tree(proc.info['pid'])
@@ -128,7 +128,7 @@ class RainParser:
             
         except SessionNotCreatedException as e:
             if "ChromeDriver only supports Chrome version" in str(e):
-                await self.plogging.error("ChromeDriver version mismatch. Please update ChromeDriver.")
+                await self.plogging.error("\n[CRITICAL] ChromeDriver version mismatch. Please update ChromeDriver.\n")
             
         except Exception as e:
             await self.plogging.error(f"An error occurred during browser restart: {e}")

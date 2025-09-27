@@ -70,17 +70,30 @@ async def on_ready():
             'stop_full': shutdown_stop 
         })
     server.run()
+    subscribe_broadcasts()
     if not searching_rain.is_running():
         searching_rain.start()
     if not restarting_browser.is_running():
         restarting_browser.start()
-
 
     await plogging.info('Bot is ready!')
     bot_already_was_ready = True
 
 
 
+
+def subscribe_broadcasts():
+    def rain_start():
+        asyncio.create_task(server.broadcast_packet(type='rain_start', client_type='raincollector'))
+    rain.rain_start.connect(rain_start)
+
+    def rain_scrap(num):
+        asyncio.create_task(server.broadcast_packet(type='rain_scrap', message={'scrap_count':num}, client_type='raincollector'))
+    rain.rain_scrap.connect(rain_scrap)
+
+    def rain_end(num, user_count):
+        asyncio.create_task(server.broadcast_packet(type='rain_end', message={'num': num, 'user_count': user_count}, client_type='raincollector'))
+    rain.rain_end.connect(rain_end)
 
     
 #░█████╗░░█████╗░███╗░░░███╗███╗░░░███╗░█████╗░███╗░░██╗██████╗░░██████╗
