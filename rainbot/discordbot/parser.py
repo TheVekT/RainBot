@@ -351,7 +351,7 @@ class RainParser:
                         await self.edit_last_message(message, scrap)
                         await asyncio.sleep(5)
                     else:
-                        self.rain_end.emit(old_scrap, old_count)
+                        self.rain_end.emit(str_to_float(old_scrap), old_count)
                         self.rain_now = False   
                         break
             # сохраняем текущее время как время последнего запуска функции
