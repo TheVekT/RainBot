@@ -87,8 +87,8 @@ def subscribe_broadcasts():
         asyncio.create_task(server.broadcast_packet(type='rain_start', message='Rain started', client_type='raincollector'))
     rain.rain_start.connect(rain_start)
 
-    def rain_scrap(num):
-        asyncio.create_task(server.broadcast_packet(type='rain_scrap', message={'scrap_count': num}, client_type='raincollector'))
+    def rain_scrap(num, user_count):
+        asyncio.create_task(server.broadcast_packet(type='rain_scrap', message={'scrap_count': num, 'user_count': user_count}, client_type='raincollector'))
     rain.rain_scrap.connect(rain_scrap)
 
     def rain_end(num, user_count):

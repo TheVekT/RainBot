@@ -346,7 +346,7 @@ class RainParser:
                     old_scrap = await self._voice_notify_typ2_(old_scrap, recent_scrap, scrap)
                     
                     if scrap is not None:
-                        self.rain_scrap.emit(str_to_float(scrap))
+                        self.rain_scrap.emit(str_to_float(scrap), count_of_users)
                         await self.plogging.debug("try to edit last message...")
                         await self.edit_last_message(message, scrap)
                         await asyncio.sleep(5)
