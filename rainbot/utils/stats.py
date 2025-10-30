@@ -534,7 +534,7 @@ class RainStats:
         self.db_path = db_path
         self.init_db()
         self.clean_old_stats.start()
-        self.retention_days = 90
+        self.retention_days = retention_days
 
     def init_db(self):
         """Инициализирует базу данных и создает необходимые таблицы."""
@@ -553,7 +553,7 @@ class RainStats:
         conn.commit()
         conn.close()
 
-    async def on_rain_end(self, scrap_amount: str, user_count: int):
+    async def on_rain_end(self, scrap_amount: float, user_count: int):
         """Обработчик сигнала окончания рейна."""
         try:
             now = datetime.now().isoformat()
@@ -562,7 +562,7 @@ class RainStats:
             conn.execute("""
                 INSERT INTO rain_stats (scrap_amount, user_count, time)
                 VALUES (?, ?, ?)
-            """, (float(scrap_amount.replace(',', '')), user_count, now))
+            """, (scrap_amount, user_count, now))
             conn.commit()
             conn.close()
             
