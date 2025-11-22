@@ -176,7 +176,7 @@ class TelegramBot:
         """Ends the rain event. Closes all active user events."""
         self.active_events.clear()
 
-    def _on_rain_scrap(self, num):
+    def _on_rain_scrap(self, num, *args):
         asyncio.create_task(self.on_rain_scrap(num))
         
     async def on_rain_scrap(self, num):
