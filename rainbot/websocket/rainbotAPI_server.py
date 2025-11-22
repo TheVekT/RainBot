@@ -125,7 +125,7 @@ class WebSocketServer:
                 }
                 await websocket.send(json.dumps(response))
             except Exception as e:
-                await self.plogging.error(f"Error sending message: {e}")
+                self.plogging.error(f"Error sending message: {e}")
                 
     async def get_registered_functions(self, websocket):
         response = {
@@ -145,8 +145,9 @@ class WebSocketServer:
             if client_type is None or info['connection_type'] == client_type:
                 try:
                     await ws.send(json.dumps(response))
+                    self.plogging.debug(f"Sent message to {info['address']}, response: {response}")
                 except Exception as e:
-                    await self.plogging.error(f"Error sending message to {info['address']}: {e}")
+                    self.plogging.error(f"Error sending message to {info['address']}: {e}")
                     disconnected_clients.append(ws)
         # Remove disconnected clients
         for ws in disconnected_clients:
@@ -155,7 +156,7 @@ class WebSocketServer:
     async def remove_client(self, websocket):
         info = self.clients.pop(websocket, None)
         if info:
-            await self.plogging.info(f"Client {info['address']} disconnected.")
+            self.plogging.info(f"Client {info['address']} disconnected.")
             if self.on_disconnect_callback:
                 self.on_disconnect_callback(info['address'])
             try:
@@ -289,7 +290,7 @@ class WebSocketServer:
 
     async def handler(self, websocket):
         client_address = websocket.remote_address
-        await self.plogging.info(f"New connection: {client_address}")
+        self.plogging.info(f"New connection: {client_address}")
 
         try:
             initial_message = await websocket.recv()
@@ -297,7 +298,7 @@ class WebSocketServer:
             # Обработка начального сообщения в формате JSON
             connection_type = data.get('arguments', {}).get('connection_type')
             if not connection_type:
-                await self.plogging.warn(f"Client {client_address} did not send connection type.")
+                self.plogging.warn(f"Client {client_address} did not send connection type.")
                 await websocket.close()
                 return
             self.clients[websocket] = {
@@ -307,17 +308,17 @@ class WebSocketServer:
             if self.on_connect_callback:
                 self.on_connect_callback(client_address)
         except Exception as e:
-            await self.plogging.error(f"Error during initial handshake with {client_address}: {e}")
+            self.plogging.error(f"Error during initial handshake with {client_address}: {e}")
             await websocket.close()
             return
 
         try:
             async for message in websocket:
-                await self.plogging.debug(f"Message received from {client_address}: {message}")
+                self.plogging.debug(f"Message received from {client_address}: {message}")
                 try:
                     data = json.loads(message)
                 except Exception as e:
-                    await self.plogging.error(f"Error parsing JSON from {client_address}: {e}")
+                    self.plogging.error(f"Error parsing JSON from {client_address}: {e}")
                     continue
 
                 # Обработка запроса по полю "request"
@@ -385,9 +386,9 @@ class WebSocketServer:
                         "message": "Invalid message format: missing 'request' field."
                     }))
         except websockets.exceptions.ConnectionClosed as e:
-            await self.plogging.warn(f"Connection closed: {client_address}, reason: {e.code} - {e.reason}")
+            self.plogging.warn(f"Connection closed: {client_address}, reason: {e.code} - {e.reason}")
         except Exception as e:
-            await self.plogging.error(f"Error with {client_address}: {e}")
+            self.plogging.error(f"Error with {client_address}: {e}")
         finally:
             await self.remove_client(websocket)
 
@@ -396,25 +397,25 @@ class WebSocketServer:
             try:
                 self.server = await websockets.serve(self.handler, self.host, self.port, max_size=16777216)
                 
-                await self.plogging.info(f"WebSocket server started on ws://{self.host}:{self.port}")
+                self.plogging.info(f"WebSocket server started on ws://{self.host}:{self.port}")
                 await self.server.wait_closed()
             except Exception as e:
-                await self.plogging.error(f"Server error: {e}")
+                self.plogging.error(f"Server error: {e}")
                 await asyncio.sleep(5)
 
     async def shutdown(self):
-        await self.plogging.debug("Shutting down WebSocket server...")
+        self.plogging.debug("Shutting down WebSocket server...")
         if self.server:
             self.server.close()
             try:
                 await asyncio.wait_for(self.server.wait_closed(), timeout=6)
             except asyncio.TimeoutError:
-                await self.plogging.warn("Timeout waiting for server to close.")
+                self.plogging.warn("Timeout waiting for server to close.")
         for ws in list(self.clients.keys()):
             try:
                 await ws.close(code=1001, reason="Server shutting down")
             except Exception as e:
-                await self.plogging.error(f"Error closing websocket: {ws}, reason: {e}")
+                self.plogging.error(f"Error closing websocket: {ws}, reason: {e}")
 
 
             

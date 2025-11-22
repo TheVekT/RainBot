@@ -58,7 +58,7 @@ class ConfigManager:
                 if 'default' not in config_data or 'commands_cooldown' not in config_data['default']:
                     raise ValueError("Структура config.json нарушена.")
         except (json.JSONDecodeError, ValueError) as e:
-            await self.plogging.error(f"Ошибка в структуре config.json: {e}")
+            self.plogging.error(f"Ошибка в структуре config.json: {e}")
 
     async def check_user_cooldown(self, member_id, command_name, last_command_use):
         try:
@@ -78,7 +78,7 @@ class ConfigManager:
             elif last_command_use is None:
                 return None
         except Exception as e:
-            await self.plogging.error(f"An error occurred while checking user cooldown: {e}")
+            self.plogging.error(f"An error occurred while checking user cooldown: {e}")
             return None
 
     async def _calculate_remaining_cooldown(self, cooldown_time, last_command_use):

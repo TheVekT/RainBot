@@ -45,7 +45,7 @@ class PlaySoundOnBot:
                     # небольшая пауза, чтобы состояние обновилось
                     await asyncio.sleep(0.5)
                 except Exception as e:
-                    await self.plogging.warn(f"Failed to disconnect existing voice_client: {e}")
+                    self.plogging.warn(f"Failed to disconnect existing voice_client: {e}")
 
             # Пробуем подключиться
             try:
@@ -54,7 +54,7 @@ class PlaySoundOnBot:
                 return new_vc
             except Exception as e:
                 # Если исключение "already connected" или подобное — пробуем забрать существующий voice_client
-                await self.plogging.warn(f"Exception on connect: {e}. Trying to get existing voice_client.")
+                self.plogging.warn(f"Exception on connect: {e}. Trying to get existing voice_client.")
                 voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
                 if voice_client and voice_client.is_connected():
                     return voice_client
@@ -64,7 +64,7 @@ class PlaySoundOnBot:
                     new_vc = await channel.connect(reconnect=False)
                     return new_vc
                 except Exception as e2:
-                    await self.plogging.error(f"Could not connect to channel {channel.id}: {e2}")
+                    self.plogging.error(f"Could not connect to channel {channel.id}: {e2}")
                     raise
 
     async def bot_sound(self, play_audio_func=None, *play_audio_args, channel_id=None):
@@ -79,14 +79,14 @@ class PlaySoundOnBot:
             if channel_id is not None:
                 channel = self.bot.get_channel(channel_id)
                 if channel is None:
-                    await self.plogging.warn("channel not found")
+                    self.plogging.warn("channel not found")
                     return
 
                 # Обеспечим безопасное подключение к конкретному каналу
                 try:
                     voice = await self._safe_connect_to_channel(channel)
                 except Exception as e:
-                    await self.plogging.error(f"Failed to get voice client for channel {channel_id}: {e}")
+                    self.plogging.error(f"Failed to get voice client for channel {channel_id}: {e}")
                     return
 
                 # Вызов проигрывания
@@ -96,7 +96,7 @@ class PlaySoundOnBot:
                     else:
                         await asyncio.sleep(0.5)
                 except Exception as e:
-                    await self.plogging.error(f"Error during play_audio_func: {e}")
+                    self.plogging.error(f"Error during play_audio_func: {e}")
 
                 # После использования — отключаемся, если мы действительно подключены к этому каналу
                 try:
@@ -106,14 +106,14 @@ class PlaySoundOnBot:
                             await voice.disconnect()
                         else:
                             # Если voice подключён к другому каналу, не трогаем его (чтобы не мешать другим)
-                            await self.plogging.warn("Voice client is connected to another channel, skipping disconnect.")
+                            self.plogging.warn("Voice client is connected to another channel, skipping disconnect.")
                 except Exception as e:
-                    await self.plogging.warn(f"Error on disconnect: {e}")
+                    self.plogging.warn(f"Error on disconnect: {e}")
                 return
 
             # Если channel_id не указан — берем первую гильдию (как в твоём коде)
             if not self.bot.guilds:
-                await self.plogging.warn("Bot has no guilds.")
+                self.plogging.warn("Bot has no guilds.")
                 return
 
             guild = self.bot.guilds[0]
@@ -127,7 +127,7 @@ class PlaySoundOnBot:
                 try:
                     voice = await self._safe_connect_to_channel(channel)
                 except Exception as e:
-                    await self.plogging.error(f"Failed to connect to channel {channel.id}: {e}")
+                    self.plogging.error(f"Failed to connect to channel {channel.id}: {e}")
                     continue
 
                 # Вызов проигрывания
@@ -137,7 +137,7 @@ class PlaySoundOnBot:
                     else:
                         await asyncio.sleep(0.5)
                 except Exception as e:
-                    await self.plogging.error(f"Error during play_audio_func in channel {channel.id}: {e}")
+                    self.plogging.error(f"Error during play_audio_func in channel {channel.id}: {e}")
 
                 # Отключаемся, если мы именно в этом канале
                 try:
@@ -145,10 +145,10 @@ class PlaySoundOnBot:
                         if getattr(voice, "channel", None) and voice.channel.id == channel.id:
                             await voice.disconnect()
                 except Exception as e:
-                    await self.plogging.warn(f"Error on disconnect after playing: {e}")
+                    self.plogging.warn(f"Error on disconnect after playing: {e}")
 
         except Exception as e:
-            await self.plogging.error(f"Error in bot_sound: {e}")
+            self.plogging.error(f"Error in bot_sound: {e}")
 
     async def play_audio(self, path_to_file, time_sleep, volume, voice: disnake.VoiceClient):
         """
@@ -156,7 +156,7 @@ class PlaySoundOnBot:
         """
         audio_path = os.path.join("sounds", path_to_file)
         if not os.path.exists(audio_path):
-            await self.plogging.error(f"File '{path_to_file}' not found in 'sounds' directory.")
+            self.plogging.error(f"File '{path_to_file}' not found in 'sounds' directory.")
             return
 
         try:
@@ -176,4 +176,4 @@ class PlaySoundOnBot:
             if voice.is_playing():
                 voice.stop()
         except Exception as e:
-            await self.plogging.error(f"Error playing audio '{path_to_file}': {e}")
+            self.plogging.error(f"Error playing audio '{path_to_file}': {e}")

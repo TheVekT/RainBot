@@ -77,10 +77,10 @@ class StatisticsTracker:
     async def on_ready(self):
         self.guild = self.bot.get_guild(self.guild_id)
         if not self.guild:
-            await self.plogging.warn(f"Guild with ID {self.guild_id} not found.")
+            self.plogging.warn(f"Guild with ID {self.guild_id} not found.")
             return
         else:
-            await self.plogging.debug(f"StatisticsTracker initialized for guild: {self.guild.name}")
+            self.plogging.debug(f"StatisticsTracker initialized for guild: {self.guild.name}")
             self.periodic_stats_update.start()
             self.clean_old_stats.start()
             self.compress_stats.start()
@@ -107,7 +107,7 @@ class StatisticsTracker:
             dt_start = datetime.fromisoformat(start_time)
             dt_end = datetime.fromisoformat(end_time)
         except Exception as e:
-            await self.plogging.warn(f"Invalid datetime format for user {user_id}: {e}")
+            self.plogging.warn(f"Invalid datetime format for user {user_id}: {e}")
             return
 
         # Если период пересекает границу дня, разбиваем его
@@ -139,7 +139,7 @@ class StatisticsTracker:
                 INSERT INTO {table_name} (user_id, user_name, state, start_time, end_time)
                 VALUES (?, ?, ?, ?, ?)
             """, (user_id, user_name, state, dt_start.isoformat(), end_of_day.isoformat()))
-            await self.plogging.debug(f"Splitting period for user {user_id}: {dt_start.isoformat()} -> {end_of_day.isoformat()}")
+            self.plogging.debug(f"Splitting period for user {user_id}: {dt_start.isoformat()} -> {end_of_day.isoformat()}")
             dt_start = datetime.combine(dt_start.date() + timedelta(days=1), datetime.min.time())
         # Последняя часть
         table_name = self._get_partition_table(dt_start)
@@ -148,7 +148,7 @@ class StatisticsTracker:
             INSERT INTO {table_name} (user_id, user_name, state, start_time, end_time)
             VALUES (?, ?, ?, ?, ?)
         """, (user_id, user_name, state, dt_start.isoformat(), dt_end.isoformat()))
-        await self.plogging.debug(f"Final split period for user {user_id}: {dt_start.isoformat()} -> {dt_end.isoformat()}")
+        self.plogging.debug(f"Final split period for user {user_id}: {dt_start.isoformat()} -> {dt_end.isoformat()}")
         conn.commit()
         conn.close()
 
@@ -159,7 +159,7 @@ class StatisticsTracker:
     async def periodic_stats_update(self):
         guild = self.bot.get_guild(self.guild_id)
         if not guild:
-            await self.plogging.error(f"Guild with ID {self.guild_id} not found.")
+            self.plogging.error(f"Guild with ID {self.guild_id} not found.")
             return
         tasks_list = [self.update_user_state(member) for member in guild.members]
         await asyncio.gather(*tasks_list, return_exceptions=True)
@@ -171,7 +171,7 @@ class StatisticsTracker:
         Это помогает «сбросить» период, чтобы гарантировать запись активного состояния.
         """
         now = datetime.now().isoformat()
-        await self.plogging.debug("Fixing stats periods")
+        self.plogging.debug("Fixing stats periods")
         for user_id, state_info in self.user_states.items():
             # Фиксируем период, если прошло более 10 минут с последней записи
             last_time = datetime.fromisoformat(state_info["start_time"])
@@ -181,7 +181,7 @@ class StatisticsTracker:
                 await self.record_state_period(user_id, user_name, state_info["state"], state_info["start_time"], now)
                 # Обновляем стартовую точку до текущего времени
                 self.user_states[user_id]["start_time"] = now
-                await self.plogging.debug(f"Periodic fixation for user {user_id}: fixed up to {now}")
+                self.plogging.debug(f"Periodic fixation for user {user_id}: fixed up to {now}")
 
     @tasks.loop(hours=1)
     async def clean_old_stats(self):
@@ -196,7 +196,7 @@ class StatisticsTracker:
             conn.commit()
             conn.close()
         except Exception as e:
-            await self.plogging.error(f"Error cleaning old stats: {e}")
+            self.plogging.error(f"Error cleaning old stats: {e}")
 
     @tasks.loop(minutes=10)
     async def compress_stats(self):
@@ -210,7 +210,7 @@ class StatisticsTracker:
             cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'user_states_%'")
             tables = [row[0] for row in cur.fetchall()]
             for table in tables:
-                await self.plogging.debug(f"Compressing table {table}")
+                self.plogging.debug(f"Compressing table {table}")
                 rows = conn.execute(f"""
                     SELECT id, user_id, user_name, state, start_time, end_time
                     FROM {table}
@@ -231,7 +231,7 @@ class StatisticsTracker:
                         gap = (r['start_time'] - prev['end_time']).total_seconds()
                         if gap <= 1:
                             prev['end_time'] = r['end_time']
-                            await self.plogging.debug(f"Merged with previous: new end_time = {prev['end_time'].isoformat()}")
+                            self.plogging.debug(f"Merged with previous: new end_time = {prev['end_time'].isoformat()}")
                             continue
                     if prev:
                         merged.append(prev)
@@ -248,10 +248,10 @@ class StatisticsTracker:
                     """, (m['user_id'], m['user_name'], m['state'],
                           m['start_time'].isoformat(), m['end_time'].isoformat()))
                 conn.commit()
-                await self.plogging.debug(f"Table {table} compressed: {len(merged)} records saved.")
+                self.plogging.debug(f"Table {table} compressed: {len(merged)} records saved.")
             conn.close()
         except Exception as e:
-            await self.plogging.error(f"Error in compress_stats: {e}")
+            self.plogging.error(f"Error in compress_stats: {e}")
 
     def get_user_timeline(self, user_id, day='previous'):
         try:
@@ -566,9 +566,9 @@ class RainStats:
             conn.commit()
             conn.close()
             
-            await self.plogging.debug(f"Recorded rain stats: {scrap_amount} scrap, {user_count} users")
+            self.plogging.debug(f"Recorded rain stats: {scrap_amount} scrap, {user_count} users")
         except Exception as e:
-            await self.plogging.error(f"Error recording rain stats: {e}")
+            self.plogging.error(f"Error recording rain stats: {e}")
 
     @tasks.loop(hours=24)
     async def clean_old_stats(self):
@@ -579,9 +579,9 @@ class RainStats:
             conn.execute("DELETE FROM rain_stats WHERE time < ?", (cutoff_date,))
             conn.commit()
             conn.close()
-            await self.plogging.debug("Cleaned old rain stats")
+            self.plogging.debug("Cleaned old rain stats")
         except Exception as e:
-            await self.plogging.error(f"Error cleaning old rain stats: {e}")
+            self.plogging.error(f"Error cleaning old rain stats: {e}")
 
     def stop(self):
         """Останавливает все задачи."""

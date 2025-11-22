@@ -227,23 +227,23 @@ class TelegramBot:
             await self._safe_initialize()  # Ensure the bot is initialized before starting polling
             await self.application.start()  # Start the bot in the existing event loop
             await self.application.updater.start_polling()  # Start polling
-            await self.plogging.info("Telegram bot successfully started")  # Logging for debugging
+            self.plogging.info("Telegram bot successfully started")  # Logging for debugging
         except Exception as e:
-            await self.plogging.error(f"Error starting Telegram bot: {e}")
+            self.plogging.error(f"Error starting Telegram bot: {e}")
 
     async def stop(self):
         """Stops the bot and closes all active connections and the database connection."""
-        await self.plogging.info("Stopping Telegram bot...")
+        self.plogging.info("Stopping Telegram bot...")
         await self.application.stop()
         try:
             await self.application.shutdown()
         except Exception as e:
-            await self.plogging.error(f"Error during application shutdown: {e}")
+            self.plogging.error(f"Error during application shutdown: {e}")
         if hasattr(self.application.bot, "session") and self.application.bot.session:
             try:
                 await self.application.bot.session.close()
             except Exception as e:
-                await self.plogging.error(f"Error closing Telegram bot session: {e}")
+                self.plogging.error(f"Error closing Telegram bot session: {e}")
         self.active_events.clear()
         self.conn.close()
 
@@ -257,22 +257,22 @@ class TelegramBot:
             ]
             await self.application.bot.set_my_commands(commands)
         except Exception as e:
-            await self.plogging.error(f"Error setting commands: {e}")
+            self.plogging.error(f"Error setting commands: {e}")
         
     async def _safe_initialize(self, retries: int = 3, delay: int = 5):
         for attempt in range(1, retries + 1):
             try:
                 await self.application.initialize()
-                await self.plogging.info("Telegram bot initialized successfully")
+                self.plogging.info("Telegram bot initialized successfully")
                 return
             except error.Conflict as e:
-                await self.plogging.error(f"Conflict error during initialization: {e}. " 
+                self.plogging.error(f"Conflict error during initialization: {e}. " 
                                           "Ensure that no other bot instance is running.")
                 raise  # Завершаем инициализацию, если уже есть другой экземпляр
             except error.TimedOut:
                 if attempt < retries:
-                    await self.plogging.warn(f"Initialize timed out, retry {attempt}/{retries} in {delay}s")
+                    self.plogging.warn(f"Initialize timed out, retry {attempt}/{retries} in {delay}s")
                     await asyncio.sleep(delay)
                 else:
-                    await self.plogging.error(f"Initialize failed after {retries} attempts")
+                    self.plogging.error(f"Initialize failed after {retries} attempts")
                     raise

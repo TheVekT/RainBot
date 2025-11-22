@@ -67,7 +67,7 @@ class RainParser:
             try:
                 self.driver.quit()
             except Exception as e:
-                await self.plogging.error(f"Error while quitting browser: {e}")
+                self.plogging.error(f"Error while quitting browser: {e}")
             finally:
                 self.driver = None
 
@@ -83,13 +83,13 @@ class RainParser:
                 for child in children:
                     try:
                         child.kill()
-                        await self.plogging.debug(f"Terminated child process with PID: {child.pid}")
+                        self.plogging.debug(f"Terminated child process with PID: {child.pid}")
                     except Exception as e:
-                        await self.plogging.warn(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
+                        self.plogging.warn(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
                 process.kill()
-                await self.plogging.debug(f"Terminated process with PID: {pid}")
+                self.plogging.debug(f"Terminated process with PID: {pid}")
             except Exception as e:
-                await self.plogging.warn(f"Failed to terminate process with PID: {pid}, error: {e}")
+                self.plogging.warn(f"Failed to terminate process with PID: {pid}, error: {e}")
 
         for proc in chrome_processes:
             await terminate_process_tree(proc.info['pid'])
@@ -106,14 +106,14 @@ class RainParser:
             if elapsed_time.total_seconds() < 1500:
                 return
             
-        await self.plogging.debug("Trying to restart browser...")
+        self.plogging.debug("Trying to restart browser...")
 
         if self.driver is not None:
             try:
                 await self.driver_quit()
-                await self.plogging.debug("Browser successfully quit.")
+                self.plogging.debug("Browser successfully quit.")
             except Exception as e:
-                await self.plogging.error(f"Failed to quit browser: {e}")
+                self.plogging.error(f"Failed to quit browser: {e}")
         self.driver = None
 
         await self.close_browsers()
@@ -128,10 +128,10 @@ class RainParser:
             
         except SessionNotCreatedException as e:
             if "ChromeDriver only supports Chrome version" in str(e):
-                await self.plogging.error("\n[CRITICAL] ChromeDriver version mismatch. Please update ChromeDriver.\n")
+                self.plogging.error("\n[CRITICAL] ChromeDriver version mismatch. Please update ChromeDriver.\n")
             
         except Exception as e:
-            await self.plogging.error(f"An error occurred during browser restart: {e}")
+            self.plogging.error(f"An error occurred during browser restart: {e}")
 
     async def _get_event_data(self):
         """Fetches and returns event-related data from the webpage HTML."""
@@ -141,15 +141,15 @@ class RainParser:
                 soup = BeautifulSoup(html, 'html.parser')
 
                 event_div = soup.find('div', {'class': 'px-4 chat-rain-outer mb-2'})
-                await self.plogging.debug(str(event_div))
+                self.plogging.debug(str(event_div))
                 if event_div is not None:
                     event_data = event_div.text
-                    #await self.plogging.debug(event_data)
+                    #self.plogging.debug(event_data)
                 else:
                     event_data = None
                 return event_data
             except Exception as e:
-                await self.plogging.error(f"Error fetching page source: {e}")
+                self.plogging.error(f"Error fetching page source: {e}")
                 await self.driver_quit()
                 await self.restart_browser()
         else:
@@ -167,13 +167,13 @@ class RainParser:
                 match = re.search(r'Rakeback Rain\s+(\d+)\s', event_data)
                 if match:
                     count = match.group(1)
-                    await self.plogging.debug(f"Count of users founded: {count}")
+                    self.plogging.debug(f"Count of users founded: {count}")
                     count = int(count)
                     return count    
             else:
                 return None
         except Exception as e:
-            await self.plogging.error(f"Error in count user check: {e}")
+            self.plogging.error(f"Error in count user check: {e}")
             return None
             
     async def _scrap_check(self): 
@@ -190,12 +190,12 @@ class RainParser:
                 match = re.search(r'share\s(\d{1,3}(?:,\d{3})*\.\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488.56
                 if match:
                     number = match.group(1)
-                    await self.plogging.debug("Number founded! " + str(number))
+                    self.plogging.debug("Number founded! " + str(number))
                     return number
             else:
                 return None
         except Exception as e:
-            await self.plogging.error(f"Error in scrap checking: {e}")
+            self.plogging.error(f"Error in scrap checking: {e}")
             return None
                 
     async def notify_users(self) -> disnake.Message | None:
@@ -207,7 +207,7 @@ class RainParser:
         try:
             channel = self.bot.get_channel(1084401349325762623) # замените на ID вашего канала
             number = await self._scrap_check()
-            await self.plogging.debug("Sending notification")
+            self.plogging.debug("Sending notification")
             embed = disnake.Embed(
                 title="🌧  Rakeback Rain NOW!!!  🌧",
                 description=f"**$ {number}**",
@@ -225,7 +225,7 @@ class RainParser:
             message = await channel.send(content="||@everyone||",embed=embed)
             return message
         except Exception as e:
-            await self.plogging.error(f"Error in sending rain notify: {e}")
+            self.plogging.error(f"Error in sending rain notify: {e}")
             
             
             
@@ -238,7 +238,7 @@ class RainParser:
         try:
             # Здесь можно не получать канал заново, если msg уже содержит нужную информацию
             if msg.author == self.bot.user:
-                await self.plogging.debug(f"Editing message... | message id : {msg.id}")
+                self.plogging.debug(f"Editing message... | message id : {msg.id}")
                 embed = disnake.Embed(
                     title="🌧  Rakeback Rain NOW!!!  🌧",
                     description=f"**$ {number}**",
@@ -253,7 +253,7 @@ class RainParser:
                 embed.set_footer(text="bandit.camp")
                 await msg.edit(content="||@everyone||", embed=embed)
         except Exception as e:
-            await self.plogging.error(f"Unhandled exception in edit_last_message: {e}")
+            self.plogging.error(f"Unhandled exception in edit_last_message: {e}")
 
     async def _voice_notify_typ1_(self, sum_of_scrap):
         """Plays a voice notification based on the amount of scrap shared in the event."""
@@ -284,19 +284,19 @@ class RainParser:
         if old_scrap is not None:
             if recent_scrap >= 400:
                 await self.sound.bot_sound(self.sound.play_audio, *("alert.m4a", 8, 0.6))
-                await self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
+                self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
                 return current_scrap
             elif recent_scrap >= 200:
                 await self.sound.bot_sound(self.sound.play_audio, *("evrei.m4a", 5, 0.4))
-                await self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
+                self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
                 return current_scrap
             elif recent_scrap >= 100:
                 await self.sound.bot_sound(self.sound.play_audio, *("potyzhno.mp3", 2, 1.5))
-                await self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
+                self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
                 return current_scrap
             elif recent_scrap >= 50:
                 await self.sound.bot_sound()
-                await self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
+                self.plogging.info(f"Old scrap lower than new on {recent_scrap}")
                 return current_scrap
         return old_scrap
     
@@ -312,19 +312,19 @@ class RainParser:
                 elapsed_time = datetime.datetime.now() - self.last_check_time
                 if elapsed_time.total_seconds() < 1500:  # 1800 секунд = 30 минут
                     return
-            await self.plogging.debug("Checking for event")  # отладочный вывод
+            self.plogging.debug("Checking for event")  # отладочный вывод
             # проверяем, что на странице сайта есть информация об ивенте
             event_data = await self._get_event_data()
             if event_data is not None and "event" in event_data.lower():
                 self.rain_start.emit()
                 self.rain_now = True
-                await self.plogging.info("Rain DETECTED!")
+                self.plogging.info("Rain DETECTED!")
                 # если есть информация об ивенте, отправляем уведомление
                 
-                await self.plogging.debug("Try to send notify about rain")
+                self.plogging.debug("Try to send notify about rain")
                 message = await self.notify_users()
             
-                await self.plogging.debug("Trying bot_sound")
+                self.plogging.debug("Trying bot_sound")
                 scrap = await self._scrap_check()
                 count_of_users = await self._users_check()
                 sum_of_scrap = str_to_float(scrap)
@@ -347,7 +347,7 @@ class RainParser:
                     
                     if scrap is not None:
                         self.rain_scrap.emit(str_to_float(scrap), count_of_users)
-                        await self.plogging.debug("try to edit last message...")
+                        self.plogging.debug("try to edit last message...")
                         await self.edit_last_message(message, scrap)
                         await asyncio.sleep(5)
                     else:
@@ -357,5 +357,5 @@ class RainParser:
             # сохраняем текущее время как время последнего запуска функции
                 self.last_check_time = datetime.datetime.now()
         except Exception as e:
-            await self.plogging.error(f"Unhandled exception in check_event: {e}")
+            self.plogging.error(f"Unhandled exception in check_event: {e}")
 

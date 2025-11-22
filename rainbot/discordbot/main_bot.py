@@ -44,7 +44,7 @@ async def restarting_browser():
 async def on_ready():
     global bot_already_was_ready
     if bot_already_was_ready:
-        await plogging.info('Bot is already running, skipping RE-initialization.')
+        plogging.info('Bot is already running, skipping RE-initialization.')
         return
     global cdown, sound, rain, stats, teleg_bot, rain_stats, server
     cdown = ConfigManager(plogging=plogging)
@@ -76,7 +76,7 @@ async def on_ready():
     if not restarting_browser.is_running():
         restarting_browser.start()
 
-    await plogging.info('Bot is ready!')
+    plogging.info('Bot is ready!')
     bot_already_was_ready = True
 
 
@@ -128,13 +128,13 @@ async def autocomplete_voice_channels(interaction: disnake.ApplicationCommandInt
 
 @bot.slash_command(name="shlepki", description="Play sound shlepki.", guild_ids=[901174571225448479])
 async def shlepki(ctx):
-    await plogging.info(f"Command 'shlepki' was used by {ctx.author.display_name}")
+    plogging.info(f"Command 'shlepki' was used by {ctx.author.display_name}")
 
     await ctx.response.defer(ephemeral=True)
     
     channel_id = ctx.author.voice.channel.id if ctx.author.voice else None
     if not channel_id:
-        await plogging.info(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
+        plogging.info(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
         await ctx.followup.send("You need to be in a voice channel to use this command.")
         return
     user_id = ctx.author.id
@@ -147,7 +147,7 @@ async def shlepki(ctx):
         cooldown = await cdown.check_user_cooldown(member_id=user_id, command_name="shlepki", last_command_use=last_use_time)
         if cooldown != 0:
             await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
-            await plogging.info(f"Declined. User have a {cooldown} sec. cooldown.")
+            plogging.info(f"Declined. User have a {cooldown} sec. cooldown.")
             return   
         
   # Устанавливаем текущее время как время последнего использования команды для данного пользователя
@@ -170,10 +170,10 @@ async def shlepki(ctx):
 async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Member):
     try:
         await ctx.response.defer(ephemeral=True)
-        await plogging.info(f"Command   'moving'   was used by   {ctx.author.display_name}\nTry to moving {member.display_name}")
+        plogging.info(f"Command   'moving'   was used by   {ctx.author.display_name}\nTry to moving {member.display_name}")
         # Проверяем, присоединен ли участник к голосовому каналу
         if ctx.author.voice is None or ctx.author.voice.channel is None:
-            await plogging.info(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
+            plogging.info(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
             embed = disnake.Embed(
                 description=f"You are not in a voice channel!",
                 colour=0xF0C43F,
@@ -184,7 +184,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             await ctx.followup.send(embed=embed)
             return
         if member.voice is None or member.voice.channel is None:
-            await plogging.info(f"Declined. Target {member.display_name} is not in a voice channel.")
+            plogging.info(f"Declined. Target {member.display_name} is not in a voice channel.")
             embed = disnake.Embed(
                 description=f"{member.mention} is not connected to a voice channel.",
                 colour=0xF0C43F,
@@ -196,7 +196,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
             return
     #koja protection
         if member.id in (1084386974967812167, -1) or member.voice.self_stream or member.voice.self_video:
-            await plogging.info("Target has immunity.")
+            plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
                 colour=0xF0C43F,
@@ -226,7 +226,7 @@ async def moving(ctx: disnake.ApplicationCommandInteraction, member: disnake.Mem
                     text="© RainBot",
                 ) 
                 await ctx.followup.send(embed=embed)
-                await plogging.info(f"Declined. User have a {cooldown} sec. cooldown.")
+                plogging.info(f"Declined. User have a {cooldown} sec. cooldown.")
                 return
 
         # Устанавливаем текущее время как время последнего использования команды для данного пользователя
@@ -262,7 +262,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
         channel = ctx.guild.get_channel(int(channel))
         await ctx.response.defer(ephemeral=True)
         
-        await plogging.info(f"Command 'move' was used by {ctx.author.display_name}\nTry to move {member.display_name} to {channel.name}")
+        plogging.info(f"Command 'move' was used by {ctx.author.display_name}\nTry to move {member.display_name} to {channel.name}")
         # Проверяем, подключен ли участник к каналу
         if ctx.author.voice is None or ctx.author.voice.channel is None:
             embed = disnake.Embed(
@@ -272,11 +272,11 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             embed.set_footer(
                 text="© RainBot",
             )
-            await plogging.warn(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
+            plogging.warn(f"Declined. User {ctx.author.display_name} is not in a voice channel.")
             await ctx.followup.send(embed=embed)
             return
         if member.voice is None or member.voice.channel is None:
-            await plogging.warn(f"Declined. Target {member.display_name} is not in a voice channel.")
+            plogging.warn(f"Declined. Target {member.display_name} is not in a voice channel.")
             embed = disnake.Embed(
                 description=f"{member.mention} is not connected to a voice channel.",
                 colour=0xF0C43F,
@@ -288,7 +288,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
             return
     #koja protection
         if member.id in (1084386974967812167, -1) or member.voice.self_stream or member.voice.self_video:
-            await plogging.info("Target has immunity.")
+            plogging.info("Target has immunity.")
             embed = disnake.Embed(
                 description=f"This user has immunity.",
                 colour=0xF0C43F,
@@ -319,7 +319,7 @@ async def move(ctx: disnake.ApplicationCommandInteraction, member: disnake.Membe
                     text="© RainBot",
                 )
                 await ctx.followup.send(embed=embed)
-                await plogging.info(f"User have a {cooldown} sec. cooldown.")
+                plogging.info(f"User have a {cooldown} sec. cooldown.")
                 return
 
         # Устанавливаем текущее время как время последнего использования команды для данного пользователя
@@ -362,7 +362,7 @@ async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.M
         await ctx.followup.send(embed=embed)
         
         return
-    await plogging.info(f"Command 'getstats' was used by {ctx.author.display_name}")
+    plogging.info(f"Command 'getstats' was used by {ctx.author.display_name}")
 
     date = 'previous' if date is None else date
     
@@ -382,11 +382,11 @@ async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.M
                 text="© RainBot",
             )
             await ctx.followup.send(embed=embed)
-            await plogging.info(f"User have a {cooldown} sec. cooldown.")
+            plogging.info(f"User have a {cooldown} sec. cooldown.")
             return
         
     stats_data = stats.get_user_stats(member.id, date)
-    await plogging.debug(f'Stats data: {stats_data}')
+    plogging.debug(f'Stats data: {stats_data}')
     if stats_data:
         embed = disnake.Embed(
             title=f"Statistics for {member.name}",
@@ -420,7 +420,7 @@ async def getstats(ctx: disnake.ApplicationCommandInteraction, member: disnake.M
 @bot.slash_command(name="test", description="test command.")
 async def test(ctx: disnake.ApplicationCommandInteraction):
 
-    await plogging.info(f"Command 'test' was used by {ctx.author.display_name}")
+    plogging.info(f"Command 'test' was used by {ctx.author.display_name}")
 
     await ctx.response.defer(ephemeral=True)
     user_id = ctx.author.id
@@ -433,7 +433,7 @@ async def test(ctx: disnake.ApplicationCommandInteraction):
         cooldown = await cdown.check_user_cooldown(member_id=user_id, command_name="test", last_command_use=last_use_time)
         if cooldown != 0:
             await ctx.followup.send(f"You have {cooldown} sec. cooldown left for this command.")
-            await plogging.info(f"User have a {cooldown} sec. cooldown.")
+            plogging.info(f"User have a {cooldown} sec. cooldown.")
             return   
         
   # Устанавливаем текущее время как время последнего использования команды для данного пользователя
@@ -458,7 +458,7 @@ mine_channel_ids = {
 
 async def shlepay(channel = None):
 
-    await plogging.info(f"Command 'shlepki' from gui client")
+    plogging.info(f"Command 'shlepki' from gui client")
     
 
     if channel in mine_channel_ids.keys():
@@ -469,7 +469,7 @@ async def shlepay(channel = None):
 
 async def nalivai(channel = None):
 
-    await plogging.info(f"Command 'nalivai' from gui client")
+    plogging.info(f"Command 'nalivai' from gui client")
 
     if channel in mine_channel_ids.keys():
         channel = mine_channel_ids[channel]
@@ -483,7 +483,7 @@ async def nalivai(channel = None):
 async def shutdown_stop(shutdown_delay_seconds: int = 180):
     import os
     minutes = shutdown_delay_seconds / 60
-    await plogging.info(f'Stopping main script with shutdown in {minutes:.1f} minutes...')
+    plogging.info(f'Stopping main script with shutdown in {minutes:.1f} minutes...')
     os.system(f"shutdown /s /t {shutdown_delay_seconds}")
     if searching_rain.is_running():
         searching_rain.stop()
@@ -498,7 +498,7 @@ async def shutdown_stop(shutdown_delay_seconds: int = 180):
 
 
 async def stop():
-    await plogging.info('Stopping main script...')
+    plogging.info('Stopping main script...')
     if searching_rain.is_running():
         searching_rain.stop()
     if restarting_browser.is_running():
@@ -512,7 +512,7 @@ async def stop():
     stats.stop()
     
 async def restart():
-    await plogging.info('RESTARTING main script...')
+    plogging.info('RESTARTING main script...')
     await rain.driver_quit()
     await rain.close_browsers()
     if restarting_browser.is_running():
@@ -534,11 +534,11 @@ async def restart():
 async def on_voice_state_update(member, before, after):
     if before.channel != after.channel:
         if after.channel is None:
-            await plogging.info(f"{member.display_name} left the voice channel {before.channel.name}.")
+            plogging.info(f"{member.display_name} left the voice channel {before.channel.name}.")
         elif before.channel is None:   
-            await plogging.info(f"{member.display_name} joined to {after.channel.name}.")
+            plogging.info(f"{member.display_name} joined to {after.channel.name}.")
         else:   
-            await plogging.info(f"{member.display_name} moved from {before.channel.name} to {after.channel.name}.")    
+            plogging.info(f"{member.display_name} moved from {before.channel.name} to {after.channel.name}.")    
 
     
     
@@ -554,8 +554,8 @@ async def try_connect():
             # Запускаем бота, используя свой цикл событий
             await bot.start(DISCORD_TOKEN)
         except (disnake.HTTPException, disnake.GatewayNotFound, disnake.ConnectionClosed, OSError) as e:
-            await plogging.warn(f"An error occurred: {e}")
-            await plogging.info("Retrying in 30 seconds...")
+            plogging.warn(f"An error occurred: {e}")
+            plogging.info("Retrying in 30 seconds...")
             await asyncio.sleep(30)  # Ожидаем 30 секунд перед повторной попыткой
         else:
             # Если подключение прошло успешно, выходим из цикла
