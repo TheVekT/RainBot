@@ -5,7 +5,7 @@ from rainbot.websocket import WebSocketServer
 from disnake.ext import commands, tasks
 from rainbot.utils import StatisticsTracker, ConfigManager, Plogging, RainStats
 from rainbot.telegrambot import TelegramBot
-from rainbot.discordbot import RainParser, PlaySoundOnBot
+from rainbot.discordbot import RainParser, PlaySoundOnBot, MusicCog
 from rainbot import DISCORD_TOKEN, TELEGRAM_TOKEN
 
 bot_already_was_ready = False
@@ -51,6 +51,7 @@ async def on_ready():
     await cdown.create_config()
     stats = StatisticsTracker(bot=bot, guild_id=901174571225448479, retention_days=700, plogging=plogging)
     sound = PlaySoundOnBot(bot, plogging=plogging)
+    bot.add_cog(MusicCog(bot, sound))
     rain = RainParser(plogging=plogging)
     rain_stats = RainStats(rain, plogging=plogging, retention_days=365)
     if rain.bot is None:

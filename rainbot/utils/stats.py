@@ -86,16 +86,21 @@ class StatisticsTracker:
             self.compress_stats.start()
 
     async def update_user_state(self, member):
+        if member.bot and member.id != self.bot.user.id:
+            return
+
         user_id = str(member.id)
         current_state = get_member_state(member)
         now = datetime.now().isoformat()
         previous_state_info = self.user_states.get(user_id)
+        
         if previous_state_info:
             previous_state = previous_state_info["state"]
             start_time = previous_state_info["start_time"]
         else:
             previous_state = None
             start_time = now
+            
         if current_state != previous_state:
             # Если состояние изменилось, записываем период для старого состояния
             await self.record_state_period(user_id, member.name, previous_state if previous_state is not None else current_state, start_time, now)
@@ -514,6 +519,9 @@ class StatisticsTracker:
             return {}
         users_data = {}
         for member in guild.members:
+            if member.bot and member.id != self.bot.user.id:
+                continue
+
             avatar_url = member.display_avatar.url if member.display_avatar else None
             users_data[str(member.id)] = {
                 'nickname': member.name,
