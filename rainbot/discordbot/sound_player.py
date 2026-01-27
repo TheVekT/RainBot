@@ -2,33 +2,22 @@ import os
 import asyncio
 import time
 import disnake
-import yt_dlp
 from disnake.ext import commands
 from functools import partial
 from rainbot.utils.plogging import Plogging
 
-# --- YT-DLP Configuration ---
-YTDL_OPTIONS = {
-    'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0',
-}
+# --- IMPORTS FOR PYTUBEFIX ---
+try:
+    from pytubefix import YouTube, Search
+    from pytubefix.cli import on_progress
+except ImportError:
+    print("CRITICAL: Pytubefix not installed. Run 'pip install pytubefix'")
 
 # --- FFMPEG Options ---
 FFMPEG_BASE_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn',
 }
-
-ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 class GuildMusicState:
     """Stores music state for a specific guild."""
@@ -227,21 +216,51 @@ class PlaySoundOnBot:
             return embed
         return None
 
+    # --- PYTUBEFIX EXTRACTION LOGIC ---
+    def _extract_pytubefix_sync(self, url_or_query):
+        """Синхронная функция для поиска и извлечения через pytubefix"""
+        try:
+            # 1. Проверяем, ссылка ли это
+            if url_or_query.startswith(('http://', 'https://')):
+                yt = YouTube(url_or_query, use_oauth=True, allow_oauth_cache=True)
+            else:
+                # 2. Если не ссылка, используем Поиск
+                self.plogging.info(f"Searching for: {url_or_query}")
+                search = Search(url_or_query)
+                if not search.videos:
+                    raise Exception("No results found.")
+                # Берем первое видео и инициализируем с OAuth
+                first_video = search.videos[0]
+                yt = YouTube(first_video.watch_url, use_oauth=True, allow_oauth_cache=True)
+
+            # 3. Извлекаем данные
+            title = yt.title
+            duration = yt.length
+            
+            # Получаем аудио поток (m4a обычно стабильнее всего)
+            stream = yt.streams.get_audio_only()
+            if not stream:
+                # Fallback если аудио не найдено (редко)
+                stream = yt.streams.filter(only_audio=True).first()
+            
+            return stream.url, title, duration
+        except Exception as e:
+            self.plogging.error(f"Pytubefix Sync Error: {e}")
+            raise e
+
     async def _get_audio_source(self, url, seek_time=0, bass_boost=False, slowed=False, sped_up=False):
         loop = asyncio.get_event_loop()
         try:
-            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+            # Запускаем синхронный pytubefix в executor, чтобы не блочить бота
+            stream_url, title, duration = await loop.run_in_executor(None, lambda: self._extract_pytubefix_sync(url))
         except Exception as e:
-            self.plogging.error(f"YTDL Error: {e}")
+            self.plogging.error(f"Extraction Error: {e}")
             return None, None, None
 
-        if 'entries' in data:
-            data = data['entries'][0]
+        if not stream_url:
+            return None, None, None
 
-        filename = data['url']
-        title = data.get('title', 'Unknown')
-        duration = data.get('duration', 0)
-        
+        # Настраиваем FFMPEG с ссылкой от pytubefix
         opts = FFMPEG_BASE_OPTIONS.copy()
         if seek_time > 0:
             opts['before_options'] += f' -ss {seek_time}'
@@ -260,7 +279,7 @@ class PlaySoundOnBot:
         else:
             opts['options'] = '-vn'
 
-        return disnake.FFmpegPCMAudio(filename, **opts), title, duration
+        return disnake.FFmpegPCMAudio(stream_url, **opts), title, duration
 
     async def _revert_to_main_delayed(self, guild_id):
         try:
