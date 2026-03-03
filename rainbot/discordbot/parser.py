@@ -155,7 +155,7 @@ class RainParser:
         else:
             return 'Empty'
         
-    async def _users_check(self) -> int | None:
+    async def _users_check(self) -> int:
         """Parses and returns the number of users who have joined the rain event.
 
         Returns:
@@ -171,10 +171,10 @@ class RainParser:
                     count = int(count)
                     return count    
             else:
-                return None
+                return -1
         except Exception as e:
             self.plogging.error(f"Error in count user check: {e}")
-            return None
+            return -1
             
     async def _scrap_check(self): 
         """Parses and returns the amount of scrap shared from the rain tips.
@@ -196,7 +196,7 @@ class RainParser:
                 return None
         except Exception as e:
             self.plogging.error(f"Error in scrap checking: {e}")
-            return None
+            return -1
                 
     async def notify_users(self) -> disnake.Message | None:
         """Sends a Discord notification about the rain event.
@@ -336,7 +336,7 @@ class RainParser:
                 while True:
                     scrap = await self._scrap_check()
                     count_of_users = await self._users_check()
-                    old_count = count_of_users if count_of_users is not None else old_count
+                    old_count = count_of_users if count_of_users != -1 else old_count
                     if str_to_float(scrap) is not None and str_to_float(old_scrap) is not None:
                         recent_scrap = str_to_float(scrap) - str_to_float(old_scrap)
 
