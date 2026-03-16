@@ -5,6 +5,7 @@ import disnake
 from disnake.ext import commands
 from functools import partial
 from rainbot.utils.plogging import Plogging
+import yt_dlp
 
 # --- IMPORTS FOR PYTUBEFIX ---
 try:
@@ -173,6 +174,37 @@ class PlaySoundOnBot:
         self._guild_locks: dict[int, asyncio.Lock] = {}
         self.music_states: dict[int, GuildMusicState] = {}
         self.priority_mode = True 
+        self.YTDL_OPTS = {
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "quiet": True,
+            "noplaylist": True,
+            "skip_download": True,
+        }
+        
+    def _extract_ytdlp_sync(self, url):
+
+        opts = self.YTDL_OPTS.copy()
+
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android"]
+            }
+        }
+
+        with yt_dlp.YoutubeDL(opts) as ydl:
+
+            info = ydl.extract_info(url, download=False)
+
+            if "entries" in info:
+                info = info["entries"][0]
+
+            stream_url = info["url"]
+            title = info.get("title")
+            duration = info.get("duration")
+
+            self.plogging.info("yt-dlp extracted using android client")
+
+            return stream_url, title, duration
 
     def _get_lock(self, guild_id: int) -> asyncio.Lock:
         if guild_id not in self._guild_locks:
@@ -249,10 +281,22 @@ class PlaySoundOnBot:
             raise e
 
     async def _get_audio_source(self, url, seek_time=0, bass_boost=False, slowed=False, sped_up=False):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
-            # Запускаем синхронный pytubefix в executor, чтобы не блочить бота
-            stream_url, title, duration = await loop.run_in_executor(None, lambda: self._extract_pytubefix_sync(url))
+            try:
+                stream_url, title, duration = await loop.run_in_executor(
+                    None, lambda: self._extract_pytubefix_sync(url)
+                )
+            except Exception:
+                self.plogging.warn("Pytubefix failed, switching to yt-dlp")
+
+                try:
+                    stream_url, title, duration = await loop.run_in_executor(
+                        None, lambda: self._extract_ytdlp_sync(url)
+                    )
+                except Exception as e:
+                    self.plogging.error(f"Extraction Error: {e}")
+                    return None, None, None
         except Exception as e:
             self.plogging.error(f"Extraction Error: {e}")
             return None, None, None

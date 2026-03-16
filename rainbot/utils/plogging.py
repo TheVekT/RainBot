@@ -28,6 +28,7 @@ class Plogging:
         return cls._instance
 
     def __init__(self):
+        self.loop = None
         self.logs_dir = os.path.normpath("./logs")
         self.config_file = os.path.join(self.logs_dir, "logging_config.json")
         if self._initialized:
@@ -171,6 +172,16 @@ class Plogging:
             print(f"Log settings saved to {self.config_file}")
         except Exception as e:
             print(f"Error saving log settings: {e}")
+            
+    def _get_loop(self):
+        if self.loop and self.loop.is_running():
+            return self.loop
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.loop = asyncio.get_event_loop()
+
+        return self.loop
 
 
     def load_log_settings(self):
@@ -222,24 +233,39 @@ class Plogging:
                 
             print(self.last_log_message)
             log_file_path = self.log_filepaths[level]
-            with open(log_file_path, "a", encoding="utf-8") as log_file:
-                log_file.write(f"{self.last_log_message}\n")
+            def write_to_file():
+                with open(log_file_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{self.last_log_message}\n")
+            await asyncio.to_thread(write_to_file)
+
         except Exception as e:
             self.recursion_guard = True
             print(f"Error in plogging: {e}")
             self.recursion_guard = False
 
     def info(self, text):
-        asyncio.create_task(self._log("info", text))
+        loop = self._get_loop()
+        loop.call_soon_threadsafe(
+            lambda: loop.create_task(self._log("info", text))
+        )
 
     def error(self, text):
-        asyncio.create_task(self._log("error", text))
+        loop = self._get_loop()
+        loop.call_soon_threadsafe(
+            lambda: loop.create_task(self._log("error", text))
+        )
 
     def debug(self, text):
-        asyncio.create_task(self._log("debug", text))
+        loop = self._get_loop()
+        loop.call_soon_threadsafe(
+            lambda: loop.create_task(self._log("debug", text))
+        )
 
     def warn(self, text):
-        asyncio.create_task(self._log("warn", text))
+        loop = self._get_loop()
+        loop.call_soon_threadsafe(
+            lambda: loop.create_task(self._log("warn", text))
+        )
 
     def get_history(self):
         return list(self.log_history) if self.log_history is not None else "Log history clear."
