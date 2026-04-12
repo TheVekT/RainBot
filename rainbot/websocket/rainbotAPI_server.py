@@ -8,11 +8,11 @@ import gzip
 import datetime
 
 class WebSocketServer:
-    def __init__(self, host='192.168.0.106', port=8765, plogging: Plogging | None = None, stats: StatisticsTracker | None = None):
+    def __init__(self, host=None, port=8765, plogging: Plogging | None = None, stats: StatisticsTracker | None = None):
         self.stats = stats
         self.plogging = Plogging() if plogging is None else plogging
         self.plogging.on_log_message.connect(self._send_new_log_message)
-        self.host = host
+        self.host = host or os.getenv('RAINBOT_HOST', '192.168.0.106')
         self.port = port
         self.server = None
         self.on_connect_callback = None

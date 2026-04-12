@@ -1,6 +1,7 @@
 import re
 import datetime
 import asyncio
+import sys
 import psutil
 import disnake
 from rainbot.utils import Plogging, str_to_float, Signal
@@ -40,10 +41,12 @@ class RainParser:
         options.add_argument('--disable-popup-blocking')  # Отключение блокировки всплывающих окон
         options.add_argument('--disable-infobars')  # Отключение информационных панелей
         options.add_argument('--disable-plugins')  # Отключение плагинов браузера
-        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                             'AppleWebKit/537.36 (KHTML, like Gecko) '
-                             'Chrome/91.0.4472.124 Safari/537.36')  # Изменение User-Agent на стандартный для Chrome
-        options.add_argument('accept-language=en-US,en;q=0.9')
+        if sys.platform == 'win32':
+            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        else:
+            user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        options.add_argument(f'--user-agent={user_agent}')
+        options.add_argument('--accept-language=en-US,en;q=0.9')
         options.add_argument("--window-position=0,0")
         options.add_argument("--headless=new")  # Запуск браузера в фоновом режиме
 
@@ -73,7 +76,12 @@ class RainParser:
 
     async def close_browsers(self):
         """Finds and terminates all running Chrome processes along with their children."""
-        chrome_processes = [proc for proc in psutil.process_iter(['pid', 'name']) if proc.info['name'] == 'chrome.exe']
+        if sys.platform == 'win32':
+            chrome_names = {'chrome.exe'}
+        else:
+            chrome_names = {'chrome', 'chromium', 'chromium-browser', 'google-chrome'}
+
+        chrome_processes = [proc for proc in psutil.process_iter(['pid', 'name']) if proc.info['name'] in chrome_names]
             
         async def terminate_process_tree(pid):
             try:

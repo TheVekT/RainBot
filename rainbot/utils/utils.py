@@ -2,6 +2,7 @@ import re
 import os
 import json
 import datetime
+from pathlib import Path
 from rainbot.utils.plogging import Plogging
 
 class Signal:
@@ -23,8 +24,9 @@ class Signal:
 
 class ConfigManager:
     def __init__(self, config_dir='config', config_file='config.json', plogging: Plogging | None = None):
-        self.config_dir = config_dir
-        self.config_file = os.path.join(config_dir, config_file)
+        base_dir = Path(__file__).resolve().parents[2]
+        self.config_dir = str(base_dir / config_dir)
+        self.config_file = os.path.join(self.config_dir, config_file)
         self.plogging = Plogging() if plogging is None else plogging
         self.default_config = {
             'default': {

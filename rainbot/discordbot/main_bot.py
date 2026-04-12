@@ -483,9 +483,13 @@ async def nalivai(channel = None):
 
 async def shutdown_stop(shutdown_delay_seconds: int = 180):
     import os
+    import sys
     minutes = shutdown_delay_seconds / 60
     plogging.info(f'Stopping main script with shutdown in {minutes:.1f} minutes...')
-    os.system(f"shutdown /s /t {shutdown_delay_seconds}")
+    if sys.platform == "win32":
+        os.system(f"shutdown /s /t {shutdown_delay_seconds}")
+    else:
+        os.system(f"shutdown -h +{max(1, int(minutes))}")
     if searching_rain.is_running():
         searching_rain.stop()
     if restarting_browser.is_running():

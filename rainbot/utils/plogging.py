@@ -3,6 +3,7 @@ import gzip
 import datetime
 import json
 import asyncio
+from pathlib import Path
 
 class Signal:
     def __init__(self):
@@ -29,8 +30,9 @@ class Plogging:
 
     def __init__(self):
         self.loop = None
-        self.logs_dir = os.path.normpath("./logs")
-        self.config_file = os.path.join(self.logs_dir, "logging_config.json")
+        self._base_dir = Path(__file__).resolve().parents[2]
+        self.logs_dir = os.path.normpath("logs")
+        self.config_file = str(self._base_dir / self.logs_dir / "logging_config.json")
         if self._initialized:
             return  # Prevent re-initialization
 
@@ -38,18 +40,19 @@ class Plogging:
         
         self.last_log_date = self._get_current_date()
         self.log_history = []
-        if not os.path.exists(self.logs_dir):
-            os.makedirs(self.logs_dir)
+        logs_dir_path = self._resolve_runtime_path(self.logs_dir)
+        if not logs_dir_path.exists():
+            logs_dir_path.mkdir(parents=True, exist_ok=True)
         # Flag to prevent recursion in logging
         self.recursion_guard = False
         self.last_log_message = ""
         self.on_log_message = Signal()
         # Settings for folders for different log levels
         self.log_folders = {
-            'info': os.path.normpath(self.logs_dir),
-            'error': os.path.normpath(self.logs_dir),
-            'debug': os.path.normpath(self.logs_dir),
-            'warn': os.path.normpath(self.logs_dir),
+            'info': self.logs_dir,
+            'error': self.logs_dir,
+            'debug': self.logs_dir,
+            'warn': self.logs_dir,
         }
         # Paths to current log files
         self.log_filepaths = {
@@ -77,10 +80,10 @@ class Plogging:
     def create_log_file(self, level):
         """Создает новый файл журнала для указанного уровня и возвращает путь к нему."""
         log_filename = self._get_log_filename()
-        folder = os.path.normpath(self.log_folders[level])  # Нормализуем путь папки
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        self.log_filepaths[level] = os.path.join(folder, log_filename)
+        folder = self._resolve_runtime_path(self.log_folders[level])
+        if not folder.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+        self.log_filepaths[level] = str(folder / log_filename)
         
         try:
             with open(self.log_filepaths[level], 'w') as f:
@@ -110,8 +113,8 @@ class Plogging:
         """Архивирует старые файлы журнала и удаляет их."""
         for level, folder in self.log_folders.items():
             # Нормализуем путь
-            folder = os.path.normpath(folder)
-            if not os.path.exists(folder):
+            folder = self._resolve_runtime_path(folder)
+            if not folder.exists():
                 print(f"Folder '{folder}' does not exist. Skipping...")
                 continue
 
@@ -120,12 +123,12 @@ class Plogging:
             if log_files:
                 for file in log_files:
                     archive_filename = f"{file[:-4]}_archive.gz"
-                    archive_filepath = os.path.join(folder, archive_filename)
+                    archive_filepath = folder / archive_filename
 
-                    with open(os.path.join(folder, file), 'rb') as f_in, gzip.open(archive_filepath, 'wb') as f_out:
+                    with open(folder / file, 'rb') as f_in, gzip.open(archive_filepath, 'wb') as f_out:
                         f_out.writelines(f_in)
                     
-                    os.remove(os.path.join(folder, file))
+                    os.remove(folder / file)
                     print(f"Log file {file} successfully zipped in {archive_filepath}")
 
     def set_websocket_settings(self, info=True, error=True, debug=True, warn=True):
@@ -149,15 +152,24 @@ class Plogging:
         """Возвращает текущую дату в формате YYYY-MM-DD."""
         return datetime.datetime.now().strftime("%Y-%m-%d")
 
+    def _normalize_folder_path(self, folder_path):
+        return Path(str(folder_path)).as_posix()
+
+    def _resolve_runtime_path(self, path_value):
+        path = Path(str(path_value))
+        if path.is_absolute():
+            return path
+        return self._base_dir / path
+
     def save_log_settings(self):
         """Сохраняет текущие настройки папок логов в JSON файл."""
         # Нормализуем пути перед сохранением
         settings = {
             'log_folders': {
-                'info': os.path.normpath(self.log_folders['info']),
-                'error': os.path.normpath(self.log_folders['error']),
-                'debug': os.path.normpath(self.log_folders['debug']),
-                'warn': os.path.normpath(self.log_folders['warn']),
+                'info': self._normalize_folder_path(self.log_folders['info']),
+                'error': self._normalize_folder_path(self.log_folders['error']),
+                'debug': self._normalize_folder_path(self.log_folders['debug']),
+                'warn': self._normalize_folder_path(self.log_folders['warn']),
             },
             'websocket_settings': {
                 'info': self._wb_translate['info'],
@@ -167,8 +179,8 @@ class Plogging:
             }
         }
         try:
-            with open(self.config_file, 'w') as json_file:
-                json.dump(settings, json_file)
+            with open(self.config_file, 'w', encoding='utf-8') as json_file:
+                json.dump(settings, json_file, indent=4, ensure_ascii=False)
             print(f"Log settings saved to {self.config_file}")
         except Exception as e:
             print(f"Error saving log settings: {e}")
@@ -190,18 +202,23 @@ class Plogging:
             try:
                 with open(self.config_file, 'r') as json_file:
                     settings = json.load(json_file)
+
+                    raw_log_folders = settings.get('log_folders', {})
                     
                     # Загружаем папки логов
-                    self.log_folders['info'] = os.path.normpath(settings.get('log_folders', {}).get('info', self.logs_dir))
-                    self.log_folders['error'] = os.path.normpath(settings.get('log_folders', {}).get('error', self.logs_dir))
-                    self.log_folders['debug'] = os.path.normpath(settings.get('log_folders', {}).get('debug', self.logs_dir))
-                    self.log_folders['warn'] = os.path.normpath(settings.get('log_folders', {}).get('warn', self.logs_dir))
+                    self.log_folders['info'] = os.path.normpath(raw_log_folders.get('info', self.logs_dir).replace('\\', os.sep))
+                    self.log_folders['error'] = os.path.normpath(raw_log_folders.get('error', self.logs_dir).replace('\\', os.sep))
+                    self.log_folders['debug'] = os.path.normpath(raw_log_folders.get('debug', self.logs_dir).replace('\\', os.sep))
+                    self.log_folders['warn'] = os.path.normpath(raw_log_folders.get('warn', self.logs_dir).replace('\\', os.sep))
                     
                     # Загружаем настройки WebSocket
                     self._wb_translate['info'] = settings.get('websocket_settings', {}).get('info', True)
                     self._wb_translate['error'] = settings.get('websocket_settings', {}).get('error', True)
                     self._wb_translate['debug'] = settings.get('websocket_settings', {}).get('debug', True)
                     self._wb_translate['warn'] = settings.get('websocket_settings', {}).get('warn', True)
+
+                    if any('\\' in str(path) for path in raw_log_folders.values()):
+                        self.save_log_settings()
 
                     print(f"Log and WebSocket settings loaded from {self.config_file}")
             except Exception as e:

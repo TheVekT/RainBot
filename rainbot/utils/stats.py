@@ -3,6 +3,7 @@ from disnake.ext import tasks, commands
 import os
 import asyncio
 import sqlite3
+from pathlib import Path
 from datetime import datetime, timedelta, date
 from rainbot.utils import Plogging
 
@@ -38,10 +39,13 @@ class StatisticsTracker:
         self.retention_days = retention_days
         self.user_states = {}  # {user_id: {"state": str, "start_time": ISO string}}
 
-        stats_dir = os.path.dirname(db_path)
-        if stats_dir and not os.path.exists(stats_dir):
-            os.makedirs(stats_dir)
-        self.db_path = db_path
+        base_dir = Path(__file__).resolve().parents[2]
+        db_path_obj = Path(db_path)
+        if not db_path_obj.is_absolute():
+            db_path = base_dir / db_path
+        db_path = Path(db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = str(db_path)
         self.init_db_master()
         self._start()
 

@@ -2,6 +2,7 @@ from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMar
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
 import sqlite3
 import asyncio
+from pathlib import Path
 from rainbot.utils import Plogging
 from rainbot.utils.stats import get_member_state
 from rainbot.discordbot import RainParser
@@ -14,7 +15,10 @@ class TelegramBot:
         self.token = token
         self.application = Application.builder().token(token).build()
         self.rain = rainparser
-        self.conn = sqlite3.connect('data/telegram-users.db')
+        base_dir = Path(__file__).resolve().parents[2]
+        db_path = base_dir / "data" / "telegram-users.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(db_path))
         self.cursor = self.conn.cursor()
         self.create_table()
         self.register_handlers()

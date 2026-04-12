@@ -1,5 +1,8 @@
 import asyncio
 from rainbot.discordbot.main_bot import try_connect
+from dotenv import load_dotenv
+
+load_dotenv()
 
 async def shutdown(loop):
     current_task = asyncio.current_task()

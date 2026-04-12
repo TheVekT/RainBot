@@ -1,14 +1,38 @@
 import os
+from pathlib import Path
 
-def _load_token(token_type):
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    # Строим путь относительно папки RainBot
-    secrets_path = os.path.join(base_dir, 'secrets', f'{token_type}.txt')
-    # Проверим, что файл существует перед его открытием
-    if not os.path.exists(secrets_path):
-        raise FileNotFoundError(f"Token file {secrets_path} not found")
-    with open(secrets_path, 'r', encoding='utf-8') as f:
-        return f.read().strip()
+def _load_env_file():
+    """Load .env from project root without external dependencies."""
+    project_root = Path(__file__).resolve().parents[1]
+    env_path = project_root / ".env"
+    if not env_path.exists():
+        return
 
-DISCORD_TOKEN = _load_token("discord_token")
-TELEGRAM_TOKEN = _load_token("telegram_token")
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def _require_token(env_var_name):
+    token = os.getenv(env_var_name, "").strip()
+    if token:
+        return token
+
+    project_root = Path(__file__).resolve().parents[1]
+    env_path = project_root / ".env"
+    raise RuntimeError(
+        f"Required environment variable {env_var_name} is missing. "
+        f"Set it in shell or in {env_path}."
+    )
+
+
+_load_env_file()
+DISCORD_TOKEN = _require_token("DISCORD_TOKEN")
+TELEGRAM_TOKEN = _require_token("TELEGRAM_TOKEN")

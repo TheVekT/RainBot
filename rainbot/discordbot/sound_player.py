@@ -1,6 +1,8 @@
 import os
 import asyncio
 import time
+import shutil
+from pathlib import Path
 import disnake
 from disnake.ext import commands
 from functools import partial
@@ -180,6 +182,20 @@ class PlaySoundOnBot:
             "noplaylist": True,
             "skip_download": True,
         }
+
+    def _project_root(self) -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def _resolve_ffmpeg_executable(self) -> str | None:
+        local_ffmpeg_dir = self._project_root() / "ffmpeg"
+        candidate_names = ["ffmpeg", "ffmpeg.exe"]
+
+        for candidate_name in candidate_names:
+            local_candidate = local_ffmpeg_dir / candidate_name
+            if local_candidate.exists():
+                return str(local_candidate)
+
+        return shutil.which("ffmpeg")
         
     def _extract_ytdlp_sync(self, url):
 
@@ -782,13 +798,15 @@ class PlaySoundOnBot:
                 self.plogging.error(f"Failed to resume music: {e}")
 
     async def play_audio(self, path_to_file, time_sleep, volume, voice: disnake.VoiceClient):
-        audio_path = os.path.join("sounds", path_to_file)
-        if not os.path.exists(audio_path): return
+        audio_path = self._project_root() / "sounds" / path_to_file
+        if not audio_path.exists():
+            return
         try:
             if voice.is_playing(): voice.stop()
         except: pass
         try:
-            audio_source = disnake.FFmpegPCMAudio(audio_path)
+            ffmpeg_executable = self._resolve_ffmpeg_executable() or "ffmpeg"
+            audio_source = disnake.FFmpegPCMAudio(str(audio_path), executable=ffmpeg_executable)
             audio_source = disnake.PCMVolumeTransformer(audio_source)
             audio_source.volume = volume
             voice.play(audio_source)
