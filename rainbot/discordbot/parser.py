@@ -1,7 +1,10 @@
 import re
 import datetime
 import asyncio
+import os
 import sys
+import shutil
+from pathlib import Path
 import psutil
 import disnake
 from rainbot.utils import Plogging, str_to_float, Signal
@@ -58,6 +61,33 @@ class RainParser:
         options.add_argument('--disable-blink-features=AutomationControlled')
 
         return options
+
+    def _find_browser_binary(self) -> str | None:
+        """Finds a Chromium/Chrome binary path on the current system."""
+        env_candidates = (
+            os.getenv("CHROME_BINARY"),
+            os.getenv("CHROMIUM_BINARY"),
+        )
+        for candidate in env_candidates:
+            if candidate and Path(candidate).is_file():
+                return str(Path(candidate))
+
+        path_candidates = (
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+        )
+        for candidate in path_candidates:
+            if Path(candidate).is_file():
+                return candidate
+
+        for candidate in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
+            resolved = shutil.which(candidate)
+            if resolved:
+                return resolved
+
+        return None
 
     def connect_bot(self, botObject: commands.Bot):
         """Connects a Discord bot to the parser and initializes the sound player."""
@@ -129,6 +159,15 @@ class RainParser:
         from selenium.common.exceptions import SessionNotCreatedException
         try:
             options = self.get_chrome_options()
+            browser_binary = self._find_browser_binary()
+            if not browser_binary:
+                raise FileNotFoundError(
+                    "Chrome/Chromium binary not found. Set CHROME_BINARY or CHROMIUM_BINARY, "
+                    "or install google-chrome / chromium-browser on the server."
+                )
+
+            options.binary_location = browser_binary
+            self.plogging.info(f"Using browser binary: {browser_binary}")
             self.driver = uc.Chrome(options=options)  # Используем undetected_chromedriver
             self.driver.get(self.url)
             self.driver.implicitly_wait(5)
