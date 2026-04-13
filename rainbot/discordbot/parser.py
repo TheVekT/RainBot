@@ -232,11 +232,11 @@ class RainParser:
         try:
             event_data = await self._get_event_data()
             if event_data is not None and "event" in event_data.lower():  
-                #match = re.search(r'share\s(\d{1,3}(?:,\d{3})*,\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488,56
-                
-                match = re.search(r'share\s(\d{1,3}(?:,\d{3})*\.\d{2})\sfrom\srain\stips\.', event_data) # search format 1,488.56
+                # Accept both decimal formats and thousand separators:
+                # 1,488.56 | 1,488,56 | 1488,56 | 1488.56
+                match = re.search(r'share\s+([\d][\d\.,\s]*)\s+from\s+rain\s+tips\.', event_data, re.IGNORECASE)
                 if match:
-                    number = match.group(1)
+                    number = re.sub(r'\s+', '', match.group(1))
                     self.plogging.debug("Number founded! " + str(number))
                     return number
             else:
@@ -304,6 +304,10 @@ class RainParser:
 
     async def _voice_notify_typ1_(self, sum_of_scrap):
         """Plays a voice notification based on the amount of scrap shared in the event."""
+        if sum_of_scrap is None:
+            self.plogging.warn("Scrap amount is None, skip voice notification.")
+            return
+
         if sum_of_scrap < 150:
             await self.sound.bot_sound(self.sound.play_audio, *("sound.wav", 3.5, 0.6))
         elif sum_of_scrap < 400:
@@ -375,7 +379,7 @@ class RainParser:
                 scrap = await self._scrap_check()
                 count_of_users = await self._users_check()
                 sum_of_scrap = str_to_float(scrap)
-                self.rain_scrap.emit(sum_of_scrap)
+                self.rain_scrap.emit(sum_of_scrap, count_of_users)
                 await self._voice_notify_typ1_(sum_of_scrap)
                 old_scrap = scrap
                 old_count = count_of_users

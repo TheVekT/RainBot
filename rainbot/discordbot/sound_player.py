@@ -5,16 +5,8 @@ import shutil
 from pathlib import Path
 import disnake
 from disnake.ext import commands
-from functools import partial
 from rainbot.utils.plogging import Plogging
 import yt_dlp
-
-# --- IMPORTS FOR PYTUBEFIX ---
-try:
-    from pytubefix import YouTube, Search
-    from pytubefix.cli import on_progress
-except ImportError:
-    print("CRITICAL: Pytubefix not installed. Run 'pip install pytubefix'")
 
 # --- FFMPEG Options ---
 FFMPEG_BASE_OPTIONS = {
@@ -22,38 +14,40 @@ FFMPEG_BASE_OPTIONS = {
     'options': '-vn',
 }
 
+
 class GuildMusicState:
     """Stores music state for a specific guild."""
+
     def __init__(self):
         self.active_url = None
         self.title = None
         self.duration = 0
-        
-        # Тайминги
+
         self.start_time = 0.0
-        self.pause_start = 0.0 
-        self.elapsed_saved = 0.0 
-        
+        self.pause_start = 0.0
+        self.elapsed_saved = 0.0
+
         self.is_playing = False
         self.is_paused = False
         self.volume = 0.5
         self.repeat = False
-        
-        # Эффекты
+
         self.bass_boost = False
-        self.slowed = False   # 0.5x
-        self.sped_up = False  # 2.0x
-        
-        self.voice_channel = None 
-        self.interaction_message = None 
-        
-        self.menu_timeout_task: asyncio.Task = None 
+        self.slowed = False
+        self.sped_up = False
+
+        self.voice_channel = None
+        self.interaction_message = None
+        self.menu_timeout_task: asyncio.Task = None
 
     @property
     def current_speed(self):
-        if self.slowed: return 0.5
-        if self.sped_up: return 2.0
+        if self.slowed:
+            return 0.5
+        if self.sped_up:
+            return 2.0
         return 1.0
+
 
 # --- Views (Buttons) ---
 
@@ -78,6 +72,7 @@ class VolumeView(disnake.ui.View):
         await interaction.response.defer()
         await self.player.update_player_message(self.guild_id, view_type="options")
 
+
 class OptionsView(disnake.ui.View):
     def __init__(self, player_class, guild_id, current_state: GuildMusicState):
         super().__init__(timeout=None)
@@ -87,7 +82,6 @@ class OptionsView(disnake.ui.View):
         style = disnake.ButtonStyle.green if current_state.repeat else disnake.ButtonStyle.gray
         label = "Repeat: ON" if current_state.repeat else "Repeat: OFF"
         self.add_item(disnake.ui.Button(label=label, style=style, custom_id="opt_repeat", row=0))
-
         self.add_item(disnake.ui.Button(label="Volume Settings", style=disnake.ButtonStyle.blurple, custom_id="opt_volume", row=0))
         self.add_item(disnake.ui.Button(label="Back", style=disnake.ButtonStyle.secondary, custom_id="opt_back", row=1))
 
@@ -104,26 +98,23 @@ class OptionsView(disnake.ui.View):
             await self.player.update_player_message(self.guild_id, view_type="main")
         return True
 
+
 class EffectsView(disnake.ui.View):
     def __init__(self, player_class, guild_id, current_state: GuildMusicState):
         super().__init__(timeout=None)
         self.player = player_class
         self.guild_id = guild_id
-        
-        # Bass Boost
+
         style_bb = disnake.ButtonStyle.green if current_state.bass_boost else disnake.ButtonStyle.gray
         label_bb = "Bass: ON" if current_state.bass_boost else "Bass: OFF"
         self.add_item(disnake.ui.Button(label=label_bb, style=style_bb, custom_id="effect_bass", row=0))
 
-        # Slow (0.5x)
         style_slow = disnake.ButtonStyle.green if current_state.slowed else disnake.ButtonStyle.gray
         self.add_item(disnake.ui.Button(label="Slow (0.5x)", style=style_slow, custom_id="effect_slow", row=1))
 
-        # Fast (2.0x)
         style_fast = disnake.ButtonStyle.green if current_state.sped_up else disnake.ButtonStyle.gray
         self.add_item(disnake.ui.Button(label="Fast (2.0x)", style=style_fast, custom_id="effect_fast", row=1))
 
-        # Back
         self.add_item(disnake.ui.Button(label="Back", style=disnake.ButtonStyle.secondary, custom_id="effect_back", row=2))
 
     async def interaction_check(self, interaction: disnake.MessageInteraction):
@@ -141,6 +132,7 @@ class EffectsView(disnake.ui.View):
             await interaction.response.defer()
             await self.player.update_player_message(self.guild_id, view_type="main")
         return True
+
 
 class MusicView(disnake.ui.View):
     def __init__(self, player_class, guild_id):
@@ -168,59 +160,38 @@ class MusicView(disnake.ui.View):
         await interaction.response.defer()
         await self.player.update_player_message(interaction.guild.id, view_type="effects")
 
+
 class PlaySoundOnBot:
     def __init__(self, botObject: commands.Bot, plogging=None):
         self.bot = botObject
         self.plogging = plogging or Plogging()
-        
         self._guild_locks: dict[int, asyncio.Lock] = {}
         self.music_states: dict[int, GuildMusicState] = {}
-        self.priority_mode = True 
+        self.priority_mode = True
         self.YTDL_OPTS = {
             "format": "bestaudio[ext=m4a]/bestaudio/best",
             "quiet": True,
             "noplaylist": True,
             "skip_download": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android_vr"]
+                }
+            },
         }
+
+    # --- Utilities ---
 
     def _project_root(self) -> Path:
         return Path(__file__).resolve().parents[2]
 
     def _resolve_ffmpeg_executable(self) -> str | None:
         local_ffmpeg_dir = self._project_root() / "ffmpeg"
-        candidate_names = ["ffmpeg", "ffmpeg.exe"]
-
-        for candidate_name in candidate_names:
-            local_candidate = local_ffmpeg_dir / candidate_name
-            if local_candidate.exists():
-                return str(local_candidate)
-
+        for name in ["ffmpeg", "ffmpeg.exe"]:
+            candidate = local_ffmpeg_dir / name
+            if candidate.exists():
+                return str(candidate)
         return shutil.which("ffmpeg")
-        
-    def _extract_ytdlp_sync(self, url):
-
-        opts = self.YTDL_OPTS.copy()
-
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["android"]
-            }
-        }
-
-        with yt_dlp.YoutubeDL(opts) as ydl:
-
-            info = ydl.extract_info(url, download=False)
-
-            if "entries" in info:
-                info = info["entries"][0]
-
-            stream_url = info["url"]
-            title = info.get("title")
-            duration = info.get("duration")
-
-            self.plogging.info("yt-dlp extracted using android client")
-
-            return stream_url, title, duration
 
     def _get_lock(self, guild_id: int) -> asyncio.Lock:
         if guild_id not in self._guild_locks:
@@ -232,87 +203,27 @@ class PlaySoundOnBot:
             self.music_states[guild_id] = GuildMusicState()
         return self.music_states[guild_id]
 
-    # --- Helpers ---
+    # --- Audio extraction (yt-dlp only) ---
 
-    def _create_embed(self, state: GuildMusicState, status="playing"):
-        if status == "playing":
-            embed = disnake.Embed(title="Now playing", color=disnake.Color.blurple())
-            embed.add_field(name="Title", value=state.title, inline=False)
-            embed.add_field(name="Duration", value=f"{state.duration // 60}:{state.duration % 60:02d}", inline=True)
-            
-            repeat_status = "On" if state.repeat else "Off"
-            options_val = f"Volume: {int(state.volume*100)}%\nRepeat: {repeat_status}"
-            embed.add_field(name="Options", value=options_val, inline=True)
-            
-            effects_str = []
-            if state.bass_boost:
-                effects_str.append("Bass Boost")
-            if state.slowed:
-                effects_str.append("Speed: 0.5x")
-            if state.sped_up:
-                effects_str.append("Speed: 2.0x")
-            
-            if effects_str:
-                embed.add_field(name="Effects", value=", ".join(effects_str), inline=False)
-                
-            return embed
-        
-        elif status == "stopped":
-            embed = disnake.Embed(title="Played", color=disnake.Color.dark_grey())
-            description = f"**{state.title}**\n{state.active_url}" if state.title and state.active_url else "Unknown track"
-            embed.description = description
-            return embed
-        return None
-
-    # --- PYTUBEFIX EXTRACTION LOGIC ---
-    def _extract_pytubefix_sync(self, url_or_query):
-        """Синхронная функция для поиска и извлечения через pytubefix"""
-        try:
-            # 1. Проверяем, ссылка ли это
-            if url_or_query.startswith(('http://', 'https://')):
-                yt = YouTube(url_or_query, use_oauth=True, allow_oauth_cache=True)
-            else:
-                # 2. Если не ссылка, используем Поиск
-                self.plogging.info(f"Searching for: {url_or_query}")
-                search = Search(url_or_query)
-                if not search.videos:
-                    raise Exception("No results found.")
-                # Берем первое видео и инициализируем с OAuth
-                first_video = search.videos[0]
-                yt = YouTube(first_video.watch_url, use_oauth=True, allow_oauth_cache=True)
-
-            # 3. Извлекаем данные
-            title = yt.title
-            duration = yt.length
-            
-            # Получаем аудио поток (m4a обычно стабильнее всего)
-            stream = yt.streams.get_audio_only()
-            if not stream:
-                # Fallback если аудио не найдено (редко)
-                stream = yt.streams.filter(only_audio=True).first()
-            
-            return stream.url, title, duration
-        except Exception as e:
-            self.plogging.error(f"Pytubefix Sync Error: {e}")
-            raise e
+    def _extract_ytdlp_sync(self, url):
+        """Synchronous yt-dlp extraction, runs in executor."""
+        with yt_dlp.YoutubeDL(self.YTDL_OPTS) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if "entries" in info:
+                info = info["entries"][0]
+            stream_url = info["url"]
+            title = info.get("title")
+            duration = info.get("duration")
+            self.plogging.info(f"yt-dlp extracted: {title}")
+            return stream_url, title, duration
 
     async def _get_audio_source(self, url, seek_time=0, bass_boost=False, slowed=False, sped_up=False):
+        """Extract audio and return FFmpegPCMAudio source."""
         loop = asyncio.get_running_loop()
         try:
-            try:
-                stream_url, title, duration = await loop.run_in_executor(
-                    None, lambda: self._extract_pytubefix_sync(url)
-                )
-            except Exception:
-                self.plogging.warn("Pytubefix failed, switching to yt-dlp")
-
-                try:
-                    stream_url, title, duration = await loop.run_in_executor(
-                        None, lambda: self._extract_ytdlp_sync(url)
-                    )
-                except Exception as e:
-                    self.plogging.error(f"Extraction Error: {e}")
-                    return None, None, None
+            stream_url, title, duration = await loop.run_in_executor(
+                None, lambda: self._extract_ytdlp_sync(url)
+            )
         except Exception as e:
             self.plogging.error(f"Extraction Error: {e}")
             return None, None, None
@@ -320,26 +231,144 @@ class PlaySoundOnBot:
         if not stream_url:
             return None, None, None
 
-        # Настраиваем FFMPEG с ссылкой от pytubefix
         opts = FFMPEG_BASE_OPTIONS.copy()
         if seek_time > 0:
             opts['before_options'] += f' -ss {seek_time}'
-        
+
         filters = []
         if bass_boost:
             filters.append("bass=g=20")
-        
         if slowed:
             filters.append("atempo=0.5")
         elif sped_up:
             filters.append("atempo=2.0")
-            
-        if filters:
-            opts['options'] = f'-vn -af "{",".join(filters)}"'
-        else:
-            opts['options'] = '-vn'
+
+        opts['options'] = f'-vn -af "{",".join(filters)}"' if filters else '-vn'
 
         return disnake.FFmpegPCMAudio(stream_url, **opts), title, duration
+
+    # --- Embed helpers ---
+
+    def _create_embed(self, state: GuildMusicState, status="playing"):
+        if status == "playing":
+            embed = disnake.Embed(title="Now playing", color=disnake.Color.blurple())
+            embed.add_field(name="Title", value=state.title, inline=False)
+            embed.add_field(name="Duration", value=f"{state.duration // 60}:{state.duration % 60:02d}", inline=True)
+
+            repeat_status = "On" if state.repeat else "Off"
+            embed.add_field(name="Options", value=f"Volume: {int(state.volume * 100)}%\nRepeat: {repeat_status}", inline=True)
+
+            effects = []
+            if state.bass_boost:
+                effects.append("Bass Boost")
+            if state.slowed:
+                effects.append("Speed: 0.5x")
+            if state.sped_up:
+                effects.append("Speed: 2.0x")
+            if effects:
+                embed.add_field(name="Effects", value=", ".join(effects), inline=False)
+            return embed
+
+        elif status == "stopped":
+            embed = disnake.Embed(title="Played", color=disnake.Color.dark_grey())
+            embed.description = f"**{state.title}**\n{state.active_url}" if state.title and state.active_url else "Unknown track"
+            return embed
+
+        return None
+
+    # --- Voice connection management ---
+
+    async def _force_cleanup_voice(self, guild: disnake.Guild):
+        """Force-remove all voice clients for a guild, cleaning up internal state."""
+        to_remove = [vc for vc in self.bot.voice_clients if vc.guild and vc.guild.id == guild.id]
+        for vc in to_remove:
+            try:
+                if vc.is_playing() or vc.is_paused():
+                    vc.stop()
+            except Exception:
+                pass
+            try:
+                await vc.disconnect(force=True)
+            except Exception:
+                pass
+            try:
+                vc.cleanup()
+            except Exception:
+                pass
+            try:
+                if vc in self.bot.voice_clients:
+                    self.bot.voice_clients.remove(vc)
+            except (ValueError, AttributeError):
+                pass
+        if to_remove:
+            await asyncio.sleep(0.5)
+
+    async def _wait_for_voice_ready(self, vc: disnake.VoiceClient, timeout: float = 10.0) -> bool:
+        """Wait for voice WebSocket to actually establish connection."""
+        start = time.time()
+        while time.time() - start < timeout:
+            if vc.is_connected():
+                return True
+            await asyncio.sleep(0.1)
+        return False
+
+    async def _safe_connect_to_channel(self, channel: disnake.VoiceChannel, max_retries: int = 3) -> disnake.VoiceClient:
+        """Safely connect to a voice channel with full retry logic."""
+        guild = channel.guild
+        lock = self._get_lock(guild.id)
+
+        async with lock:
+            for attempt in range(1, max_retries + 1):
+                voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
+
+                if voice_client is not None:
+                    if voice_client.is_connected():
+                        vc_channel = getattr(voice_client, "channel", None)
+                        if vc_channel and vc_channel.id == channel.id:
+                            return voice_client
+                        try:
+                            await voice_client.move_to(channel)
+                            if await self._wait_for_voice_ready(voice_client, timeout=5.0):
+                                return voice_client
+                        except Exception as e:
+                            self.plogging.warn(f"move_to failed: {e}")
+
+                    self.plogging.info("Stale voice client, forcing cleanup...")
+                    await self._force_cleanup_voice(guild)
+
+                try:
+                    new_vc = await channel.connect(timeout=15.0, reconnect=True)
+                    if await self._wait_for_voice_ready(new_vc, timeout=10.0):
+                        self.plogging.info(f"Connected to {channel.name}")
+                        return new_vc
+                    else:
+                        self.plogging.warn(f"Voice not ready after connect (attempt {attempt})")
+                        await self._force_cleanup_voice(guild)
+                except disnake.errors.ClientException as e:
+                    self.plogging.warn(f"ClientException: {e} (attempt {attempt})")
+                    await self._force_cleanup_voice(guild)
+                except asyncio.TimeoutError:
+                    self.plogging.warn(f"Timeout connecting (attempt {attempt})")
+                    await self._force_cleanup_voice(guild)
+                except Exception as e:
+                    self.plogging.error(f"Connect error: {e} (attempt {attempt})")
+                    await self._force_cleanup_voice(guild)
+
+            raise Exception(f"Failed to connect to {channel.name} after {max_retries} attempts")
+
+    async def _disconnect_voice_safe(self, guild_id):
+        """Safely disconnect from voice."""
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+        voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
+        if voice_client:
+            try:
+                await voice_client.disconnect(force=True)
+            except Exception:
+                pass
+
+    # --- Player message updates ---
 
     async def _revert_to_main_delayed(self, guild_id):
         try:
@@ -350,34 +379,27 @@ class PlaySoundOnBot:
         except Exception as e:
             self.plogging.warn(f"Revert task error: {e}")
 
-    async def _disconnect_voice_safe(self, guild_id):
-        """Helper to disconnect asynchronously from sync context."""
-        guild = self.bot.get_guild(guild_id)
-        if not guild: return
-        voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
-        if voice_client:
-            await voice_client.disconnect()
-
     async def update_player_message(self, guild_id, view_type="main", force_status=None):
         state = self._get_state(guild_id)
         if not state.interaction_message:
             return
-        
+
         if state.menu_timeout_task:
             state.menu_timeout_task.cancel()
             state.menu_timeout_task = None
 
-        status = force_status if force_status else ("playing" if state.is_playing else "stopped")
-        
+        status = force_status or ("playing" if state.is_playing else "stopped")
+
         if status == "stopped":
-             embed = self._create_embed(state, status="stopped")
-             try:
+            embed = self._create_embed(state, status="stopped")
+            try:
                 await state.interaction_message.edit(embed=embed, view=None)
-             except Exception: pass
-             return
+            except Exception:
+                pass
+            return
 
         embed = self._create_embed(state, status="playing")
-        
+
         if view_type == "effects":
             view = EffectsView(self, guild_id, state)
         elif view_type == "options":
@@ -394,28 +416,28 @@ class PlaySoundOnBot:
         except Exception as e:
             self.plogging.warn(f"Failed to update player message: {e}")
 
-    # --- Internal Play Logic ---
+    # --- Playback logic ---
 
     async def _play_track(self, guild_id):
         guild = self.bot.get_guild(guild_id)
-        if not guild: return
-        
+        if not guild:
+            return
+
         state = self._get_state(guild_id)
         voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
 
-        if not voice_client:
+        if not voice_client or not voice_client.is_connected():
             self.plogging.error("Voice client unavailable for playback.")
             return
 
         source, title, duration = await self._get_audio_source(
-            state.active_url, 
-            seek_time=0, 
+            state.active_url,
             bass_boost=state.bass_boost,
             slowed=state.slowed,
             sped_up=state.sped_up
         )
         if not source:
-            self.plogging.error("Failed to get audio source in loop.")
+            self.plogging.error("Failed to get audio source.")
             return
 
         source = disnake.PCMVolumeTransformer(source)
@@ -431,19 +453,18 @@ class PlaySoundOnBot:
         def after_playing(error):
             if error:
                 self.plogging.error(f"Player error: {error}")
-            
-            if state.is_playing: 
+            if state.is_playing:
                 if state.repeat:
-                    coro = self._play_track(guild_id)
-                    asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+                    asyncio.run_coroutine_threadsafe(self._play_track(guild_id), self.bot.loop)
                 else:
                     state.is_playing = False
-                    coro_msg = self.update_player_message(guild_id, force_status="stopped")
-                    asyncio.run_coroutine_threadsafe(coro_msg, self.bot.loop)
-                    coro_disc = self._disconnect_voice_safe(guild_id)
-                    asyncio.run_coroutine_threadsafe(coro_disc, self.bot.loop)
+                    asyncio.run_coroutine_threadsafe(self.update_player_message(guild_id, force_status="stopped"), self.bot.loop)
+                    asyncio.run_coroutine_threadsafe(self._disconnect_voice_safe(guild_id), self.bot.loop)
 
         try:
+            if voice_client.is_playing():
+                voice_client.stop()
+                await asyncio.sleep(0.05)
             voice_client.play(source, after=after_playing)
             await self.update_player_message(guild_id, view_type="main")
         except Exception as e:
@@ -453,17 +474,17 @@ class PlaySoundOnBot:
 
     async def change_volume(self, guild_id, change_amount):
         state = self._get_state(guild_id)
-        new_vol = max(0.0, min(2.0, state.volume + change_amount))
-        state.volume = new_vol
+        state.volume = max(0.0, min(2.0, state.volume + change_amount))
 
         guild = self.bot.get_guild(guild_id)
         if guild:
             vc = disnake.utils.get(self.bot.voice_clients, guild=guild)
             if vc and vc.source:
                 try:
-                    vc.source.volume = new_vol
-                except Exception: pass
-        
+                    vc.source.volume = state.volume
+                except Exception:
+                    pass
+
         await self.update_player_message(guild_id, view_type="volume")
 
     async def toggle_repeat(self, guild_id):
@@ -472,103 +493,102 @@ class PlaySoundOnBot:
         await self.update_player_message(guild_id, view_type="options")
 
     async def toggle_effect(self, guild_id, effect_type):
-        """Переключает эффекты и перезапускает поток."""
+        """Toggle an audio effect and restart the stream."""
         state = self._get_state(guild_id)
-        
+
         if effect_type == 'bass':
             state.bass_boost = not state.bass_boost
         elif effect_type == 'slow':
             state.slowed = not state.slowed
-            if state.slowed: state.sped_up = False 
+            if state.slowed:
+                state.sped_up = False
         elif effect_type == 'fast':
             state.sped_up = not state.sped_up
-            if state.sped_up: state.slowed = False 
+            if state.sped_up:
+                state.slowed = False
 
         await self._reload_player_state(guild_id)
         await self.update_player_message(guild_id, view_type="effects")
 
     async def _reload_player_state(self, guild_id):
-        """Безопасный перезапуск плеера (Hot Swap)."""
+        """Hot-swap: restart playback with new effects while preserving position."""
         guild = self.bot.get_guild(guild_id)
-        if not guild: return
-        
+        if not guild:
+            return
+
         state = self._get_state(guild_id)
         voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
 
-        if not state.is_playing: return
-        if not voice_client: return
+        if not state.is_playing or not voice_client:
+            return
 
-        # 1. Расчет позиции
+        # Calculate current position
         if state.is_paused:
             current_pos = state.elapsed_saved
         else:
-            elapsed_wall = time.time() - state.start_time
-            current_pos = elapsed_wall * state.current_speed 
+            current_pos = (time.time() - state.start_time) * state.current_speed
 
-        # 2. Ставим флаг manual stop
-        state.is_playing = False 
-        
-        # 3. Стопаем
+        # Stop current playback (set flag first to prevent after_playing callback)
+        state.is_playing = False
         if voice_client.is_connected():
-            voice_client.stop() 
-        
+            voice_client.stop()
         await asyncio.sleep(0.1)
-        
-        # 4. Реконнект
-        if not voice_client.is_connected():
-            try:
-                if state.voice_channel:
-                    voice_client = await self._safe_connect_to_channel(state.voice_channel)
-                else: return 
-            except Exception: return
 
-        # 5. Новый source
-        seek_pos_int = int(current_pos)
+        # Reconnect if needed
+        if not voice_client.is_connected():
+            if not state.voice_channel:
+                return
+            try:
+                voice_client = await self._safe_connect_to_channel(state.voice_channel)
+            except Exception:
+                return
+
+        # Create new source at the saved position
         source, _, _ = await self._get_audio_source(
-            state.active_url, 
-            seek_time=seek_pos_int, 
+            state.active_url,
+            seek_time=int(current_pos),
             bass_boost=state.bass_boost,
             slowed=state.slowed,
             sped_up=state.sped_up
         )
+        if not source:
+            return
 
-        if source:
-            source = disnake.PCMVolumeTransformer(source)
-            source.volume = state.volume
-            
-            new_speed = state.current_speed
-            state.start_time = time.time() - (current_pos / new_speed)
-            state.is_playing = True
-            
-            def after_playing_restart(error):
-                if state.is_playing:
-                    if state.repeat:
-                        coro = self._play_track(guild_id)
-                        asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
-                    else:
-                        state.is_playing = False
-                        coro_msg = self.update_player_message(guild_id, force_status="stopped")
-                        asyncio.run_coroutine_threadsafe(coro_msg, self.bot.loop)
-                        coro_disc = self._disconnect_voice_safe(guild_id)
-                        asyncio.run_coroutine_threadsafe(coro_disc, self.bot.loop)
+        source = disnake.PCMVolumeTransformer(source)
+        source.volume = state.volume
 
-            try:
-                voice_client.play(source, after=after_playing_restart)
-            except Exception: pass
-            
-            if state.is_paused:
-                voice_client.pause()
-                state.pause_start = time.time()
+        state.start_time = time.time() - (current_pos / state.current_speed)
+        state.is_playing = True
+
+        def after_playing_restart(error):
+            if state.is_playing:
+                if state.repeat:
+                    asyncio.run_coroutine_threadsafe(self._play_track(guild_id), self.bot.loop)
+                else:
+                    state.is_playing = False
+                    asyncio.run_coroutine_threadsafe(self.update_player_message(guild_id, force_status="stopped"), self.bot.loop)
+                    asyncio.run_coroutine_threadsafe(self._disconnect_voice_safe(guild_id), self.bot.loop)
+
+        try:
+            voice_client.play(source, after=after_playing_restart)
+        except Exception:
+            pass
+
+        if state.is_paused:
+            voice_client.pause()
+            state.pause_start = time.time()
 
     async def toggle_pause(self, guild_id, interaction=None):
         guild = self.bot.get_guild(guild_id)
-        if not guild: return
-            
+        if not guild:
+            return
+
         voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
         state = self._get_state(guild_id)
-        
+
         if not voice_client:
-            if interaction: await interaction.send("Bot is not connected.", ephemeral=True)
+            if interaction:
+                await interaction.send("Bot is not connected.", ephemeral=True)
             return
 
         if state.is_paused:
@@ -580,29 +600,33 @@ class PlaySoundOnBot:
             voice_client.pause()
             state.is_paused = True
             state.pause_start = time.time()
-            elapsed_wall = state.pause_start - state.start_time
-            state.elapsed_saved = elapsed_wall * state.current_speed
-            
+            state.elapsed_saved = (state.pause_start - state.start_time) * state.current_speed
 
     async def stop_music(self, guild_id, interaction=None, new_track_starting=False):
         guild = self.bot.get_guild(guild_id)
-        if not guild: return
+        if not guild:
+            return
 
         voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
         state = self._get_state(guild_id)
-        
+
         if state.menu_timeout_task:
             state.menu_timeout_task.cancel()
             state.menu_timeout_task = None
 
-        state.is_playing = False 
+        state.is_playing = False
         state.is_paused = False
-        
+
         if voice_client:
             if new_track_starting:
-                 voice_client.stop() 
+                if voice_client.is_playing() or voice_client.is_paused():
+                    voice_client.stop()
+                    await asyncio.sleep(0.05)
             else:
-                 await voice_client.disconnect()
+                try:
+                    await voice_client.disconnect(force=True)
+                except Exception:
+                    pass
 
         if not new_track_starting and state.interaction_message:
             try:
@@ -611,24 +635,24 @@ class PlaySoundOnBot:
             except Exception as e:
                 self.plogging.warn(f"Error editing stop message: {e}")
 
-    # --- Main Entry Point (Restored) ---
+    # --- Main entry point ---
 
     async def play_youtube_logic(self, interaction: disnake.ApplicationCommandInteraction, url: str, volume: float = 0.5, repeat: bool = False, bass_boost: bool = False):
         await interaction.response.defer()
-        
+
         if not interaction.author.voice:
             await interaction.edit_original_response(content="You are not in a voice channel.")
             return
 
         state = self._get_state(interaction.guild.id)
-        
+
         if state.is_playing:
-             await self.stop_music(interaction.guild.id, new_track_starting=True)
+            await self.stop_music(interaction.guild.id, new_track_starting=True)
 
         voice_channel = interaction.author.voice.channel
-        
+
         try:
-            voice_client = await self._safe_connect_to_channel(voice_channel)
+            await self._safe_connect_to_channel(voice_channel)
         except Exception as e:
             await interaction.edit_original_response(content=f"Error connecting: {e}")
             return
@@ -637,50 +661,17 @@ class PlaySoundOnBot:
         state.volume = volume
         state.repeat = repeat
         state.bass_boost = bass_boost
-        # Сброс остальных эффектов при старте нового трека
         state.slowed = False
         state.sped_up = False
         state.voice_channel = voice_channel
-        
+
         embed = disnake.Embed(title="Loading...", color=disnake.Color.blurple())
         msg = await interaction.edit_original_response(content=None, embed=embed, view=None)
         state.interaction_message = msg
 
         await self._play_track(interaction.guild.id)
 
-    # --- Safe Connect & Bot Sound (No changes needed) ---
-
-    async def _safe_connect_to_channel(self, channel: disnake.VoiceChannel) -> disnake.VoiceClient:
-        guild = channel.guild
-        lock = self._get_lock(guild.id)
-        async with lock:
-            voice_client: disnake.VoiceClient | None = disnake.utils.get(self.bot.voice_clients, guild=guild)
-            if voice_client and voice_client.is_connected():
-                try:
-                    vc_channel = getattr(voice_client, "channel", None)
-                    if vc_channel and vc_channel.id == channel.id:
-                        return voice_client
-                except Exception:
-                    voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
-                try:
-                    await voice_client.disconnect()
-                    await asyncio.sleep(0.5)
-                except Exception: pass
-
-            try:
-                new_vc = await channel.connect(reconnect=False)
-                return new_vc
-            except Exception:
-                voice_client = disnake.utils.get(self.bot.voice_clients, guild=guild)
-                if voice_client and voice_client.is_connected():
-                    return voice_client
-                try:
-                    await asyncio.sleep(0.3)
-                    new_vc = await channel.connect(reconnect=False)
-                    return new_vc
-                except Exception as e2:
-                    self.plogging.error(f"Could not connect to channel {channel.id}: {e2}")
-                    raise
+    # --- Bot sound (priority interruption system) ---
 
     async def bot_sound(self, play_audio_func=None, *play_audio_args, channel_id=None):
         interrupted_state = None
@@ -688,20 +679,18 @@ class PlaySoundOnBot:
 
         if channel_id:
             ch = self.bot.get_channel(channel_id)
-            if ch: target_guild = ch.guild
+            if ch:
+                target_guild = ch.guild
         elif self.bot.guilds:
             target_guild = self.bot.guilds[0]
 
+        # Save current music state if playing (priority mode)
         if self.priority_mode and target_guild:
             state = self._get_state(target_guild.id)
             if state.is_playing:
-                if state.is_paused:
-                    current_elapsed = state.pause_start - state.start_time
-                else:
-                    current_elapsed = time.time() - state.start_time
-                
+                current_elapsed = (state.pause_start - state.start_time) if state.is_paused else (time.time() - state.start_time)
                 state.elapsed_saved = max(0, current_elapsed * state.current_speed)
-                
+
                 interrupted_state = {
                     'url': state.active_url,
                     'volume': state.volume,
@@ -711,85 +700,85 @@ class PlaySoundOnBot:
                     'bass_boost': state.bass_boost,
                     'slowed': state.slowed,
                     'sped_up': state.sped_up,
-                    'was_paused': state.is_paused # ADDED: Save pause state
+                    'was_paused': state.is_paused,
                 }
-                
+
                 vc = disnake.utils.get(self.bot.voice_clients, guild=target_guild)
-                if vc: 
-                    state.is_playing = False 
+                if vc:
+                    state.is_playing = False
                     vc.stop()
                 await asyncio.sleep(0.2)
 
+        # Play the bot sound
         try:
             if channel_id is not None:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
                     try:
                         voice = await self._safe_connect_to_channel(channel)
-                        if play_audio_func: await play_audio_func(*play_audio_args, voice)
-                        else: await asyncio.sleep(0.5)
+                        if play_audio_func:
+                            await play_audio_func(*play_audio_args, voice)
+                        else:
+                            await asyncio.sleep(0.5)
                         if voice and voice.is_connected() and voice.channel.id == channel.id:
-                            await voice.disconnect()
-                    except Exception as e: self.plogging.error(f"BotSound Error: {e}")
+                            await voice.disconnect(force=True)
+                    except Exception as e:
+                        self.plogging.error(f"BotSound Error: {e}")
             else:
-               if self.bot.guilds:
-                   guild = self.bot.guilds[0]
-                   channels_with_users = [ch for ch in guild.voice_channels if len(ch.members) > 0]
-                   for channel in channels_with_users:
-                       try:
-                           voice = await self._safe_connect_to_channel(channel)
-                           if play_audio_func: await play_audio_func(*play_audio_args, voice)
-                           else: await asyncio.sleep(0.5)
-                           if voice and voice.is_connected() and voice.channel.id == channel.id:
-                               await voice.disconnect()
-                       except Exception: pass
+                if self.bot.guilds:
+                    guild = self.bot.guilds[0]
+                    for channel in [ch for ch in guild.voice_channels if len(ch.members) > 0]:
+                        try:
+                            voice = await self._safe_connect_to_channel(channel)
+                            if play_audio_func:
+                                await play_audio_func(*play_audio_args, voice)
+                            else:
+                                await asyncio.sleep(0.5)
+                            if voice and voice.is_connected() and voice.channel.id == channel.id:
+                                await voice.disconnect(force=True)
+                        except Exception:
+                            pass
         except Exception as e:
             self.plogging.error(f"Error in bot_sound: {e}")
 
+        # Resume interrupted music
         if interrupted_state and target_guild:
             await asyncio.sleep(0.5)
             try:
                 channel = interrupted_state['channel']
                 voice_client = await self._safe_connect_to_channel(channel)
-                
+
                 source, title, duration = await self._get_audio_source(
-                    interrupted_state['url'], 
+                    interrupted_state['url'],
                     seek_time=int(interrupted_state['seek']),
                     bass_boost=interrupted_state['bass_boost'],
                     slowed=interrupted_state['slowed'],
                     sped_up=interrupted_state['sped_up']
                 )
-                
+
                 if source:
                     source = disnake.PCMVolumeTransformer(source)
                     source.volume = interrupted_state['volume']
-                    
+
                     state = self._get_state(target_guild.id)
                     state.is_playing = True
-                    state.is_paused = interrupted_state['was_paused'] # RESTORE: Set paused state
-                    
-                    cur_speed = 1.0
-                    if interrupted_state['slowed']: cur_speed = 0.5
-                    elif interrupted_state['sped_up']: cur_speed = 2.0
-                    
+                    state.is_paused = interrupted_state['was_paused']
+
+                    cur_speed = 0.5 if interrupted_state['slowed'] else (2.0 if interrupted_state['sped_up'] else 1.0)
                     state.start_time = time.time() - (interrupted_state['seek'] / cur_speed)
                     state.voice_channel = channel
 
                     def after_playing(error):
-                         if state.is_playing:
+                        if state.is_playing:
                             if state.repeat:
-                                coro = self._play_track(target_guild.id)
-                                asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+                                asyncio.run_coroutine_threadsafe(self._play_track(target_guild.id), self.bot.loop)
                             else:
                                 state.is_playing = False
-                                coro_msg = self.update_player_message(target_guild.id, force_status="stopped")
-                                asyncio.run_coroutine_threadsafe(coro_msg, self.bot.loop)
-                                coro_disc = self._disconnect_voice_safe(target_guild.id)
-                                asyncio.run_coroutine_threadsafe(coro_disc, self.bot.loop)
+                                asyncio.run_coroutine_threadsafe(self.update_player_message(target_guild.id, force_status="stopped"), self.bot.loop)
+                                asyncio.run_coroutine_threadsafe(self._disconnect_voice_safe(target_guild.id), self.bot.loop)
 
                     voice_client.play(source, after=after_playing)
-                    
-                    # RESTORE: Immediate pause if it was paused
+
                     if state.is_paused:
                         voice_client.pause()
                         state.pause_start = time.time()
@@ -802,8 +791,10 @@ class PlaySoundOnBot:
         if not audio_path.exists():
             return
         try:
-            if voice.is_playing(): voice.stop()
-        except: pass
+            if voice.is_playing():
+                voice.stop()
+        except Exception:
+            pass
         try:
             ffmpeg_executable = self._resolve_ffmpeg_executable() or "ffmpeg"
             audio_source = disnake.FFmpegPCMAudio(str(audio_path), executable=ffmpeg_executable)
@@ -811,9 +802,11 @@ class PlaySoundOnBot:
             audio_source.volume = volume
             voice.play(audio_source)
             await asyncio.sleep(time_sleep)
-            if voice.is_playing(): voice.stop()
+            if voice.is_playing():
+                voice.stop()
         except Exception as e:
             self.plogging.error(f"Error playing audio: {e}")
+
 
 class MusicCog(commands.Cog):
     def __init__(self, bot, sound_player: PlaySoundOnBot):
@@ -822,9 +815,9 @@ class MusicCog(commands.Cog):
 
     @commands.slash_command(name="play", description="Play music from YouTube")
     async def play(
-        self, 
-        inter: disnake.ApplicationCommandInteraction, 
-        url: str, 
+        self,
+        inter: disnake.ApplicationCommandInteraction,
+        url: str,
         volume: float = commands.Param(default=0.5, ge=0.0, le=2.0),
         repeat: bool = False,
         bass_boost: bool = False
