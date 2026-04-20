@@ -105,32 +105,30 @@ class RainParser:
                 self.driver = None
 
     async def close_browsers(self):
-        """Finds and terminates all running Chrome processes along with their children."""
+        """Finds and terminates only the Chrome processes spawned by THIS specific script."""
+        
         if sys.platform == 'win32':
             chrome_names = {'chrome.exe'}
         else:
             chrome_names = {'chrome', 'chromium', 'chromium-browser', 'google-chrome'}
 
-        chrome_processes = [proc for proc in psutil.process_iter(['pid', 'name']) if proc.info['name'] in chrome_names]
+        try:
+            await self.driver_quit()
             
-        async def terminate_process_tree(pid):
-            try:
-                await self.driver_quit()
-                process = psutil.Process(pid)
-                children = process.children(recursive=True)
-                for child in children:
-                    try:
+            current_process = psutil.Process(os.getpid())
+            children = current_process.children(recursive=True)
+            
+            for child in children:
+                try:
+                    if child.name() in chrome_names:
                         child.kill()
-                        self.plogging.debug(f"Terminated child process with PID: {child.pid}")
-                    except Exception as e:
-                        self.plogging.warn(f"Failed to terminate child process with PID: {child.pid}, error: {e}")
-                process.kill()
-                self.plogging.debug(f"Terminated process with PID: {pid}")
-            except Exception as e:
-                self.plogging.warn(f"Failed to terminate process with PID: {pid}, error: {e}")
-
-        for proc in chrome_processes:
-            await terminate_process_tree(proc.info['pid'])
+                        self.plogging.debug(f"Terminated child Chrome process with PID: {child.pid}")
+                except Exception as e:
+                    self.plogging.warn(f"Failed to terminate child PID: {child.pid}, error: {e}")
+                    
+        except Exception as e:
+            self.plogging.warn(f"Error while cleaning up process tree: {e}")
+            
         await asyncio.sleep(2)
 
     async def restart_browser(self):
