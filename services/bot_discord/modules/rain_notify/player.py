@@ -1,4 +1,4 @@
-"""Notification player — priority voice alerts.
+"""Notification player - priority voice alerts.
 
 Plays audio files from disk through Discord voice channels. When music is
 already playing, the ``VoiceManager`` is used to interrupt (pause) the music,
@@ -57,7 +57,6 @@ class RainNotifyPlayer:
                 if fallback.exists():
                     self.sounds_dir = fallback
 
-    # ── Helpers ──────────────────────────────────────────────────────
 
     @staticmethod
     def _project_root() -> Path:
@@ -76,7 +75,6 @@ class RainNotifyPlayer:
                     return str(candidate)
         return shutil.which("ffmpeg") or "ffmpeg"
 
-    # ── Core playback ────────────────────────────────────────────────
 
     async def _play_file(
         self,
@@ -129,7 +127,6 @@ class RainNotifyPlayer:
         except Exception as e:
             logger.error("Error playing audio file: %s", e)
 
-    # ── Public API ───────────────────────────────────────────────────
 
     async def play_notification(
         self,
