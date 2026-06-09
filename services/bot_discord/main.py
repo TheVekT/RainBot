@@ -86,7 +86,7 @@ async def main() -> None:
         )
 
         # 6. Initialize audio and notification components
-        config_provider = DatabaseConfigProvider(db_pool)
+        config_provider = DatabaseConfigProvider(db_pool, config_manager.guild_id)
         
         voice_manager = VoiceManager(bot)
         notification_player = RainNotifyPlayer(

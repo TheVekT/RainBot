@@ -9,15 +9,33 @@ class TelegramUser(models.Model):
 
 class DiscordAccount(models.Model):
     account_id = models.BigIntegerField(primary_key=True, help_text="Discord Snowflake User ID")
+    username = models.CharField(max_length=255, help_text="Global unique Discord username")
     nickname = models.CharField(max_length=255, help_text="Current Discord nickname")
     avatar_url = models.TextField(null=True, blank=True, help_text="Discord avatar image URL")
     current_status = models.CharField(max_length=50, help_text="Current real-time status of the user")
 
     class Meta:
         db_table = 'discord_accounts'
+        verbose_name = 'Discord Account'
+        verbose_name_plural = 'Discord Accounts'
 
     def __str__(self):
-        return f"{self.nickname} ({self.account_id})"
+        return f"{self.username} ({self.account_id})"
+
+
+class DiscordVoiceChannel(models.Model):
+    channel_id = models.BigIntegerField(primary_key=True, help_text="Discord Snowflake Channel ID")
+    name = models.CharField(max_length=255, help_text="Voice channel name")
+    is_active = models.BooleanField(default=True, help_text="Indicates if the channel still exists on the server")
+
+    class Meta:
+        db_table = 'discord_voice_channels'
+        verbose_name = 'Discord Voice Channel'
+        verbose_name_plural = 'Discord Voice Channels'
+
+    def __str__(self):
+        return f"{self.name} ({self.channel_id})"
+
 
 class DiscordUserPresence(models.Model):
     account = models.ForeignKey(
@@ -30,11 +48,23 @@ class DiscordUserPresence(models.Model):
     state = models.CharField(max_length=50, help_text="Recorded state of the user")
     start_time = models.DateTimeField(db_index=True)
     end_time = models.DateTimeField()
+    channel = models.ForeignKey(
+        DiscordVoiceChannel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="presences",
+        db_column="channel_id",
+        help_text="Reference to the voice channel if the presence is voice-related"
+    )
 
     class Meta:
         db_table = 'discord_user_presence'
+        verbose_name = 'Discord User Presence'
+        verbose_name_plural = 'Discord User Presences'
         indexes = [
             models.Index(fields=['account', 'start_time']),
+            models.Index(fields=['channel', 'start_time', 'end_time']),
         ]
 
     def __str__(self):

@@ -38,7 +38,7 @@ class UserPresenceTracker:
         self.guild_id = guild_id
         self.repo = repo
         self.retention_days = retention_days
-        self.user_states = {}  # {account_id: {"state": str, "start_time": datetime(UTC)}}
+        self.user_states = {}  # {account_id: {"state": str, "channel_id": int | None, "start_time": datetime(UTC)}}
         self.guild = None
 
         self._start()
@@ -67,43 +67,54 @@ class UserPresenceTracker:
 
         account_id = member.id
         current_state = get_member_state(member)
+        current_channel_id = member.voice.channel.id if member.voice and member.voice.channel else None
         now_utc = datetime.now(timezone.utc)
         
         previous_state_info = self.user_states.get(account_id)
         
         if previous_state_info:
             previous_state = previous_state_info["state"]
+            previous_channel_id = previous_state_info["channel_id"]
             start_time = previous_state_info["start_time"]
         else:
             previous_state = None
+            previous_channel_id = None
             start_time = now_utc
             
-        if current_state != previous_state:
+        if current_state != previous_state or current_channel_id != previous_channel_id:
             state_to_record = previous_state if previous_state is not None else current_state
-            await self.record_state_period(member, state_to_record, start_time, now_utc)
-            self.user_states[account_id] = {"state": current_state, "start_time": now_utc}
+            channel_to_record = previous_channel_id if previous_state is not None else current_channel_id
+            
+            await self.record_state_period(member, state_to_record, start_time, now_utc, channel_to_record)
+            self.user_states[account_id] = {"state": current_state, "channel_id": current_channel_id, "start_time": now_utc}
 
-    async def record_state_period(self, member: disnake.Member, state: str, start_time: datetime, end_time: datetime) -> None:
+    async def record_state_period(self, member: disnake.Member, state: str, start_time: datetime, end_time: datetime, channel_id: int | None = None) -> None:
         account_id = member.id
         
+        # Ensure channel entity is verified in DB tracking layer before presence insertion
+        if channel_id and not await self.repo.is_channel_exist(channel_id):
+            ch_obj = self.guild.get_channel(channel_id) if self.guild else None
+            ch_name = ch_obj.name if ch_obj else f"Unknown Channel {channel_id}"
+            await self.repo.create_channel(channel_id, ch_name, is_active=True)
+
         # 1. Immediate interval insert to prevent gaps or polling lag
         if start_time.date() != end_time.date():
-            await self.record_period_split(account_id, state, start_time, end_time)
+            await self.record_period_split(account_id, state, start_time, end_time, channel_id)
         else:
-            await self.repo.save_period(account_id, state, start_time, end_time)
+            await self.repo.save_period(account_id, state, start_time, end_time, channel_id)
         
         # 2. Fire and forget background synchronization for profile accounts table
         asyncio.create_task(self._sync_profile_background(member))
 
-    async def record_period_split(self, account_id: int, state: str, dt_start: datetime, dt_end: datetime) -> None:
+    async def record_period_split(self, account_id: int, state: str, dt_start: datetime, dt_end: datetime, channel_id: int | None = None) -> None:
         while dt_start.date() < dt_end.date():
             end_of_day = datetime.combine(dt_start.date(), datetime.max.time(), tzinfo=timezone.utc)
             if end_of_day >= dt_start:
-                await self.repo.save_period(account_id, state, dt_start, end_of_day)
+                await self.repo.save_period(account_id, state, dt_start, end_of_day, channel_id)
             dt_start = datetime.combine(dt_start.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
         
         if dt_start < dt_end:
-            await self.repo.save_period(account_id, state, dt_start, dt_end)
+            await self.repo.save_period(account_id, state, dt_start, dt_end, channel_id)
 
     async def _sync_profile_background(self, member: disnake.Member) -> None:
         """Background profile execution task ensuring existence before tracking status changes."""
@@ -116,7 +127,8 @@ class UserPresenceTracker:
                 avatar_url = str(member.display_avatar.url) if member.display_avatar else ""
                 await self.repo.create_account(
                     account_id=account_id,
-                    nickname=member.display_name,
+                    username=member.name,          # Передаем глобальный логин
+                    nickname=member.display_name,  # Серверное имя
                     avatar_url=avatar_url,
                     current_status=current_status
                 )
@@ -140,7 +152,7 @@ class UserPresenceTracker:
             if (now_utc - last_time) >= timedelta(minutes=10):
                 member = self.guild.get_member(account_id) if self.guild else None
                 if member:
-                    await self.record_state_period(member, state_info["state"], last_time, now_utc)
+                    await self.record_state_period(member, state_info["state"], last_time, now_utc, state_info["channel_id"])
                     self.user_states[account_id]["start_time"] = now_utc
 
     @tasks.loop(hours=24)
@@ -150,6 +162,14 @@ class UserPresenceTracker:
             return
         logger.info("[UserStats] Executing daily full profile synchronization...")
         try:
+            # Sync channels topology structure
+            batch_channels = []
+            for channel in self.guild.voice_channels:
+                batch_channels.append((channel.id, channel.name, True))
+            if batch_channels:
+                await self.repo.bulk_upsert_channels(batch_channels)
+
+            # Sync user configurations profiles
             batch_data = []
             for member in self.guild.members:
                 if member.bot and member.id != self.bot.user.id:
@@ -158,13 +178,14 @@ class UserPresenceTracker:
                 current_status = get_member_state(member)
                 batch_data.append((
                     member.id,
+                    member.name,
                     member.display_name,
                     avatar_url,
                     current_status
                 ))
             if batch_data:
                 await self.repo.bulk_upsert_accounts(batch_data)
-                logger.info(f"[UserStats] Successfully synced {len(batch_data)} profiles.")
+                logger.info(f"[UserStats] Successfully synced {len(batch_data)} profiles and {len(batch_channels)} voice channels.")
         except Exception as e:
             logger.error(f"Error in daily profile sync: {e}")
 
@@ -192,7 +213,7 @@ class UserPresenceTracker:
             member = self.guild.get_member(account_id) if self.guild else None
             if member:
                 tasks_to_save.append(
-                    self.record_state_period(member, state_info['state'], state_info['start_time'], now_utc)
+                    self.record_state_period(member, state_info['state'], state_info['start_time'], now_utc, state_info['channel_id'])
                 )
             
         if tasks_to_save:

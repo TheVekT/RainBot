@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import TelegramUser, DiscordUserPresence, RainStat, DiscordBotConfig, DiscordAccount, BanditScraperConfig
+from .models import TelegramUser, DiscordUserPresence, RainStat, DiscordBotConfig, DiscordAccount, BanditScraperConfig, DiscordVoiceChannel
 
 @admin.register(TelegramUser)
 class TelegramUserAdmin(admin.ModelAdmin):
@@ -8,18 +8,24 @@ class TelegramUserAdmin(admin.ModelAdmin):
 
 @admin.register(DiscordAccount)
 class DiscordAccountAdmin(admin.ModelAdmin):
-    list_display = ('account_id', 'nickname', 'current_status')
-    search_fields = ('nickname', 'account_id')
+    list_display = ('account_id', 'username', 'nickname', 'current_status')
+    search_fields = ('username', 'nickname', 'account_id')
 
 @admin.register(DiscordUserPresence)
 class DiscordUserPresenceAdmin(admin.ModelAdmin):
-    list_display = ('account_id', 'get_nickname', 'state', 'start_time', 'end_time')
+    list_display = ('account_id', 'get_username', 'state', 'channel', 'start_time', 'end_time')
     list_filter = ('state',)
-    search_fields = ('account__account_id', 'account__nickname')
+    search_fields = ('account__account_id', 'account__username')
 
-    @admin.display(description="Nickname")
-    def get_nickname(self, obj):
-        return obj.account.nickname
+    @admin.display(description="Username")
+    def get_username(self, obj):
+        return obj.account.username
+    
+@admin.register(DiscordVoiceChannel)
+class DiscordVoiceChannelAdmin(admin.ModelAdmin):
+    list_display = ('channel_id', 'name', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'channel_id')
 
 @admin.register(RainStat)
 class RainStatAdmin(admin.ModelAdmin):

@@ -14,7 +14,7 @@ class AbstractPresenceRepository(ABC):
         pass
 
     @abstractmethod
-    async def create_account(self, account_id: int, nickname: str, avatar_url: str, current_status: str) -> None:
+    async def create_account(self, account_id: int, username: str, nickname: str, avatar_url: str, current_status: str) -> None:
         """
         Creates a new user profile in the database.
         """
@@ -35,7 +35,28 @@ class AbstractPresenceRepository(ABC):
         pass
 
     @abstractmethod
-    async def save_period(self, account_id: int, state: str, start_time: datetime, end_time: datetime) -> None:
+    async def is_channel_exist(self, channel_id: int) -> bool:
+        """
+        Checks if a voice channel exists in the cache or database.
+        """
+        pass
+
+    @abstractmethod
+    async def create_channel(self, channel_id: int, name: str, is_active: bool) -> None:
+        """
+        Creates a new voice channel profile in the database.
+        """
+        pass
+
+    @abstractmethod
+    async def bulk_upsert_channels(self, channels: list[tuple]) -> None:
+        """
+        Performs a mass update/insert of voice channels for the synchronization cycle.
+        """
+        pass
+
+    @abstractmethod
+    async def save_period(self, account_id: int, state: str, start_time: datetime, end_time: datetime, channel_id: int | None = None) -> None:
         """
         Saves a continuous duration of user presence state log.
         """
