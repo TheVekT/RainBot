@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package telegram_bot;
+
+service TelegramNotificationService {
+    rpc BroadcastRainStarted (RainBroadcastRequest) returns (CommandResponse);
+    rpc BroadcastRainUpdated (RainBroadcastRequest) returns (CommandResponse);
+    rpc BroadcastRainEnded (RainBroadcastRequest) returns (CommandResponse);
+}
+
+message RainBroadcastRequest {
+    float scrap_amount = 1;
+}
+
+message CommandResponse {
+    bool success = 1;
+    string error_message = 2;
+}

@@ -1,0 +1,130 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: rainbot_postgres
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_NAME:-rainbot_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web_backend:
+    build:
+      context: ./services/web_backend
+      dockerfile: Dockerfile
+    container_name: rainbot_django_web
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - SHARED_MEDIA=/shared_media
+    depends_on:
+      - db
+    volumes:
+      - ./services/web_backend:/app
+      - ./shared_media:/shared_media
+      - static_data:/app/staticfiles
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+
+  orchestrator_grpc:
+    build:
+      context: ./services/web_backend
+      dockerfile: Dockerfile
+    container_name: rainbot_orchestrator
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - ./services/web_backend:/app
+      - ./shared_media:/shared_media
+    command: >
+      sh -c "python manage.py run_grpc"
+
+  bandit_scraper:
+    build:
+      context: ./services/bandit_scraper
+      dockerfile: Dockerfile
+    container_name: rainbot_scraper
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - ORCHESTRATOR_GRPC_HOST=orchestrator_grpc:50051
+    depends_on:
+      - db
+      - orchestrator_grpc
+    shm_size: '2gb'
+    volumes:
+      - ./services/bandit_scraper:/app
+
+  bot_telegram:
+    build:
+      context: ./services/bot_telegram
+      dockerfile: Dockerfile
+    container_name: rainbot_telegram
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - GRPC_PORT=50052
+    depends_on:
+      - db
+      - orchestrator_grpc
+    volumes:
+      - ./services/bot_telegram:/app
+
+  bot_discord:
+    build:
+      context: ./services/bot_discord
+      dockerfile: Dockerfile
+    container_name: rainbot_discord
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - GRPC_PORT=50053
+      - SOUNDS_DIR=/shared_media/audio
+    depends_on:
+      - db
+      - orchestrator_grpc
+    volumes:
+      - ./services/bot_discord:/app
+      - ./shared_media:/shared_media
+
+  nginx:
+    image: nginx:alpine
+    container_name: rainbot_nginx
+    restart: always
+    ports:
+      # Open port 80 for testing
+      - "80:80"
+    depends_on:
+      - web_backend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - static_data:/var/www/static
+      - ./shared_media:/shared_media
+
+  # TUNNEL CLOUDFLARE (UNCOMMENT TO ENABLE)
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: rainbot_tunnel
+  #   restart: always
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TOKEN}
+  #   depends_on:
+  #     - nginx
+
+volumes:
+  postgres_data:
+  static_data:

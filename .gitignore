@@ -1,12 +1,17 @@
-logs/
-venv/
-stats/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-sounds/1/
-test_bot.py
-RAINstart.lnk
-RainStart.bat
-data/
-telegram_token.txt
-discord_token.txt
+*.py[cod]
+*$py.class
+
+# Environments
 .env
+venv/
+.venv/
+
+# Django and media
+staticfiles/
+shared_media/
+
+# IDEs and editors
+.idea/
+.vscode/

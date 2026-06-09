@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package rainbot;
+
+message RainEvent {
+    enum EventType {
+        STARTED = 0;
+        IN_PROGRESS = 1;
+        ENDED = 2;
+    }
+    
+    EventType event_type = 1;
+    float scrap_amount = 2;
+    int32 user_count = 3;
+}
+
+message BaseResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+service OrchestratorService {
+    rpc SendRainUpdate (RainEvent) returns (BaseResponse);
+}
+
+service BotNotificationService {
+    rpc NotifyUsers (RainEvent) returns (BaseResponse);
+}
