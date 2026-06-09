@@ -1,329 +1,206 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ user_profile.nickname }} - Detailed Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{% static 'public_web/css/user_detail.css' %}">
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
 
-    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <a href="#" class="text-xl font-bold text-indigo-400 tracking-wide">🌧️ RainBot Analytics</a>
-            <div class="space-x-4">
-                <a href="#" class="text-gray-300 hover:text-white transition">Rains History</a>
-                <a href="{% url 'public_web:user_list' %}" class="text-gray-300 hover:text-white transition">Discord Users</a>
+<body class="min-h-screen text-gray-100 flex flex-col relative overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
+
+    <!-- Radial Decorative Background Glow -->
+    <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none z-0"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-emerald-600/5 blur-[120px] pointer-events-none z-0"></div>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-40 bg-gray-950/70 border-b border-gray-800/60 backdrop-blur-md px-4 md:px-6 py-4">
+        <div class="w-full flex justify-between items-center">
+            <a href="#" class="text-xl font-bold tracking-wide flex items-center gap-2 hover:opacity-90 transition">
+                <span class="text-2xl">🌧️</span>
+                <span class="text-gradient-indigo font-extrabold">RainBot Analytics</span>
+            </a>
+            <div class="flex items-center gap-6">
+                <a href="#" class="text-sm font-medium text-gray-400 hover:text-indigo-400 transition">Rains History</a>
+                <a href="{% url 'public_web:user_list' %}" class="text-sm font-semibold bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 px-4 py-1.5 rounded-full transition-all">
+                    Discord Users
+                </a>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto px-6 py-8">
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            
-            <div class="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-2xl p-6 flex items-center gap-6 relative shadow-xl">
+    <!-- Main Dashboard Container -->
+    <main class="w-full px-4 md:px-6 py-8 flex-1 z-10">
+
+        <!-- PROFILE HEADER -->
+        <div class="fade-in-up mb-8">
+            <!-- User Info Card -->
+            <div class="w-full glass-card rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6 relative overflow-hidden">
+                <div class="absolute right-0 bottom-0 opacity-5 pointer-events-none select-none font-bold text-9xl tracking-tighter text-white">
+                    STAT
+                </div>
                 {% if user_profile.avatar_url %}
-                    <img src="{{ user_profile.avatar_url }}" alt="{{ user_profile.nickname }}" class="w-24 h-24 rounded-full border-4 border-gray-700 object-cover">
+                <img src="{{ user_profile.avatar_url }}" alt="{{ user_profile.nickname }}"
+                    class="w-24 h-24 rounded-full border-2 border-gray-600/40 object-cover shadow-lg transition-transform hover:scale-105 duration-300">
                 {% else %}
-                    <div class="w-24 h-24 rounded-full bg-indigo-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-gray-700">
-                        {{ user_profile.nickname|slice:":1"|upper }}
-                    </div>
+                <div class="w-24 h-24 rounded-full bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-3xl font-bold shadow-lg">
+                    {{ user_profile.nickname|slice:":1"|upper }}
+                </div>
                 {% endif %}
-                <div class="min-w-0">
-                    <h2 class="text-2xl font-extrabold text-white truncate">{{ user_profile.nickname }}</h2>
+                <div class="text-center sm:text-left min-w-0">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-center sm:justify-start mb-1">
+                        <h2 class="text-2xl font-extrabold text-white tracking-wide truncate">{{ user_profile.nickname }}</h2>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide w-fit self-center
+                            {% if user_profile.current_status == 'offline' %} bg-gray-900/50 text-gray-400 border border-gray-700/50
+                            {% elif 'voice' in user_profile.current_status %} bg-emerald-950/35 text-emerald-400 border border-emerald-900/45
+                            {% else %} bg-indigo-950/35 text-indigo-400 border border-indigo-900/45 {% endif %}">
+                            {% if user_profile.current_status == 'offline' %}Offline
+                            {% elif user_profile.current_status == 'online' %}Online
+                            {% elif user_profile.current_status == 'voice_online' %}Voice Online
+                            {% elif user_profile.current_status == 'voice_mute' %}Voice Muted
+                            {% elif user_profile.current_status == 'voice_deaf' %}Voice Deafened
+                            {% elif user_profile.current_status == 'voice_afk' %}Voice AFK
+                            {% elif user_profile.current_status == 'voice_alone' %}Alone in Voice
+                            {% else %}{{ user_profile.current_status }}{% endif %}
+                        </span>
+                    </div>
                     <p class="text-indigo-400 font-semibold text-sm">@{{ user_profile.username }}</p>
-                    <p class="text-gray-500 text-xs mt-1">Account ID: {{ user_profile.account_id }}</p>
-                    <span class="text-xs text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mt-2 inline-block">Source: {{ history_source }}</span>
+                    <div class="flex flex-wrap gap-2 mt-3 items-center justify-center sm:justify-start">
+                        <span class="text-[10px] uppercase font-bold text-gray-400 bg-gray-900/45 px-2 py-0.5 rounded border border-gray-700/50">
+                            ID: {{ user_profile.account_id }}
+                        </span>
+                    </div>
                 </div>
-            </div>
-
-            <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 flex flex-col justify-center shadow-xl">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Timeline View Date</h3>
-                <input 
-                    type="date" 
-                    id="timeline-date-picker" 
-                    value="{{ today_date }}"
-                    class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-gray-100 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                >
-                <p id="client-tz-indicator" class="text-xs text-gray-500 mt-2 text-right italic">Detecting timezone...</p>
             </div>
         </div>
 
-        <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl relative mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-white">Daily Presence Timeline</h3>
-                <span id="active-date-label" class="text-sm font-semibold text-indigo-400 bg-indigo-950/40 px-3 py-1 rounded-full border border-indigo-900/60"></span>
-            </div>
-            
-            <div class="relative w-full select-none">
-                <div id="timeline-track" class="relative w-full h-12 bg-gray-900 rounded-xl overflow-hidden border border-gray-700 flex"></div>
-                <div class="relative w-full flex justify-between px-1 mt-2 text-xs text-gray-500 font-medium">
-                    <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span>
-                </div>
-            </div>
-
-            <div class="mt-6 pt-4 border-t border-gray-700/50 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-xs">
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#288c00]"></span> <span class="text-gray-400">Online</span></div>
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#00ffdd]"></span> <span class="text-gray-400">Voice Active</span></div>
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#aeff00]"></span> <span class="text-gray-400">Voice Mute</span></div>
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#ff5500]"></span> <span class="text-gray-400">Voice Deaf</span></div>
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#ff00d0]"></span> <span class="text-gray-400">Voice AFK</span></div>
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#a200ff]"></span> <span class="text-gray-400">Voice Alone</span></div>
-                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-[#6e6e6e]"></span> <span class="text-gray-400">Offline</span></div>
-            </div>
-        </div>
-
+        <!-- DASHBOARD BODY: HEATMAP -> TIMELINE -> CHARTS -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <div class="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col">
-                <h3 class="text-lg font-bold text-white mb-2">Yearly Contribution Heatmap</h3>
-                <p class="text-xs text-gray-400 mb-6">Activity metrics scaled by total online duration inside user's native calendar timeframe.</p>
-                <div class="overflow-x-auto overflow-y-hidden pb-2 flex-1 flex items-center justify-center">
-                    <div id="heatmap-container" class="min-w-[720px]"></div>
+
+            <!-- COLUMN 1 & 2: MAIN CHARTS -->
+            <div class="lg:col-span-2 flex flex-col gap-8">
+
+                <!-- Heatmap Card (Placed First) -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col fade-in-up delay-100">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-gray-800/60 pb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white tracking-wide">Yearly Activity Heatmap</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Scale represents active presence time mapped to user calendar frames.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <!-- Active Calendar Focus Widget -->
+                            <div class="flex items-center gap-2.5 bg-gray-900/60 border border-gray-800/80 rounded-xl px-4 py-2 shadow-inner">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Active Calendar Focus:</span>
+                                <div id="selected-date-display" class="text-sm font-extrabold text-indigo-400 tracking-wide cursor-pointer hover:text-indigo-350 transition-colors flex items-center gap-1.5" title="Click to change date">
+                                    Loading... 📅
+                                </div>
+                                <input type="date" id="timeline-date-picker" value="{{ today_date }}" class="absolute opacity-0 pointer-events-none w-0 h-0">
+                            </div>
+                            <span class="hidden xl:inline-block text-[10px] text-gray-400 font-bold uppercase tracking-wider bg-gray-900/50 px-2 py-1.5 rounded border border-gray-700/50">
+                                Interactive Glass Grid
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex items-center justify-center py-2">
+                        <div id="heatmap-container" class="w-full flex justify-center"></div>
+                    </div>
                 </div>
+
+                <!-- Timeline Card (Placed Second) -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col fade-in-up delay-200">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-800/60 pb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white tracking-wide">Daily Presence Timeline</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Hourly activity distribution logs for the active target day.</p>
+                        </div>
+                        <span id="active-date-label"
+                            class="text-xs font-bold text-indigo-400 bg-indigo-950/45 px-3 py-1 rounded-full border border-indigo-900/60 shadow-sm">
+                            June 10, 2026
+                        </span>
+                    </div>
+
+                    <div class="relative w-full select-none mt-2">
+                        <div id="timeline-track"
+                            class="relative w-full h-12 bg-gray-950/80 rounded-xl overflow-hidden border border-gray-800/80 flex shadow-inner">
+                        </div>
+                        <div class="relative w-full flex justify-between px-1 mt-2.5 text-[10px] text-gray-500 font-bold tracking-wider">
+                            <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Status Legend -->
+                    <div class="mt-6 pt-4 border-t border-gray-850 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4 text-[11px] font-semibold text-gray-400">
+                        <div class="flex flex-wrap gap-4">
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#22c55e]"></span> <span>Online</span></div>
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#06b6d4]"></span> <span>Voice Active</span></div>
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#84cc16]"></span> <span>Voice Muted</span></div>
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></span> <span>Voice Deafened</span></div>
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#ec4899]"></span> <span>Voice AFK</span></div>
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#8b5cf6]"></span> <span>Alone in Voice</span></div>
+                            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#4b5563]"></span> <span>Offline</span></div>
+                        </div>
+                        <span class="text-gray-500 italic text-[10px] font-medium sm:text-right">
+                            Note: All stats & timeline logs adapt to your local timezone.
+                        </span>
+                    </div>
+                </div>
+
             </div>
 
-            <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col items-center">
-                <h3 class="text-lg font-bold text-white mb-1 self-start">Activity Radar Profile</h3>
-                <p class="text-xs text-gray-400 mb-6 self-start">Proportional distributions of active session types (Offline omitted).</p>
-                <div class="w-full h-64 flex items-center justify-center">
-                    <canvas id="radar-chart-canvas"></canvas>
+            <!-- COLUMN 3: SIDEBAR RADAR CHART -->
+            <div class="flex flex-col gap-8 fade-in-up delay-300">
+                
+                <!-- Quick Stats Widget -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col relative overflow-hidden">
+                    <h3 class="text-base font-bold text-white mb-4 border-b border-gray-800/60 pb-3 tracking-wide">Day Summary</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3.5 flex flex-col justify-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total Active</span>
+                            <span id="qs-online-duration" class="text-base font-extrabold text-gradient-green mt-1">0m</span>
+                        </div>
+                        <div class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3.5 flex flex-col justify-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Voice Time</span>
+                            <span id="qs-voice-duration" class="text-base font-extrabold text-indigo-400 mt-1">0m</span>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Radar Profile Card -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col items-center">
+                    <h3 class="text-base font-bold text-white mb-1 self-start tracking-wide">Activity Radar Profile</h3>
+                    <p class="text-xs text-gray-400 mb-6 self-start">Active session types proportional distribution (offline omitted).</p>
+                    <div class="w-full h-64 flex items-center justify-center">
+                        <canvas id="radar-chart-canvas"></canvas>
+                    </div>
+                </div>
+
             </div>
 
         </div>
     </main>
 
-    <div id="timeline-tooltip" class="fixed hidden z-50 bg-gray-950/95 border border-gray-700 text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none text-gray-200"></div>
+    <!-- Floating UI Tooltips and Lenses -->
+    <div id="timeline-tooltip"
+        class="fixed hidden z-50 bg-gray-950/95 border border-gray-800 text-xs rounded-xl px-4 py-2.5 shadow-2xl pointer-events-none text-gray-200 font-medium backdrop-blur-sm">
+    </div>
 
+    <div id="heatmap-lens" class="fixed pointer-events-none w-44 h-44 rounded-full overflow-hidden hidden z-50 flex items-center justify-center">
+        <!-- Glossy Sheen Overlay -->
+        <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none rounded-full z-10"></div>
+        <!-- Lens Content Container (for absolute children) -->
+        <div id="lens-grid" class="relative w-full h-full pointer-events-none">
+        </div>
+    </div>
+
+    <!-- Initialization and Data Injection -->
     <script>
-        // Reverse backend status index mapping
-        const REVERSE_STATE_MAP = {
-            0: "offline", 1: "online", 2: "voice_online", 
-            3: "voice_mute", 4: "voice_deaf", 5: "voice_afk", 6: "voice_alone"
-        };
-
-        const COLOR_MAP = {
-            "offline": "#6e6e6e", "online": "#288c00", "voice_online": "#00ffdd",
-            "voice_mute": "#aeff00", "voice_deaf": "#ff5500", "voice_afk": "#ff00d0", "voice_alone": "#a200ff"
-        };
-
         const rawHistory = {{ yearly_history_json|safe }};
-        
-        const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        document.getElementById('client-tz-indicator').innerText = `Timezone: ${userTz}`;
-
-        let radarChartInstance = null;
-
-        // Custom ISO string generator ensuring compliance across locales
-        function getYYYYMMDD(date) {
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const dd = String(date.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        }
-
-        function formatTimeStr(dateObj) {
-            return dateObj.toTimeString().split(' ')[0];
-        }
-
-        // --- TIMELINE CONTROLLER ---
-        function renderTimeline(targetDateStr) {
-            const track = document.getElementById('timeline-track');
-            track.innerHTML = ''; 
-
-            document.getElementById('active-date-label').innerText = targetDateStr;
-
-            const localStart = new Date(`${targetDateStr}T00:00:00`);
-            const localEnd = new Date(`${targetDateStr}T23:59:59.999`);
-
-            const viewStartTs = Math.floor(localStart.getTime() / 1000);
-            const viewEndTs = Math.floor(localEnd.getTime() / 1000);
-            const viewDuration = viewEndTs - viewStartTs;
-
-            const visiblePeriods = rawHistory.filter(item => item[1] < viewEndTs && item[2] > viewStartTs);
-
-            if (visiblePeriods.length === 0) {
-                track.innerHTML = `<div class="w-full h-full bg-[#6e6e6e] opacity-40 flex items-center justify-center text-xs text-gray-400">No presence logs available for this date</div>`;
-                return;
-            }
-
-            const tooltip = document.getElementById('timeline-tooltip');
-
-            visiblePeriods.forEach(item => {
-                const stateStr = REVERSE_STATE_MAP[item[0]];
-                const startTs = item[1];
-                const endTs = item[2];
-                const chName = item[3] || 'N/A';
-
-                const clampedStart = Math.max(startTs, viewStartTs);
-                const clampedEnd = Math.min(endTs, viewEndTs);
-                const duration = clampedEnd - clampedStart;
-
-                if (duration <= 0) return;
-
-                const leftPct = ((clampedStart - viewStartTs) / viewDuration) * 100;
-                const widthPct = (duration / viewDuration) * 100;
-
-                const segment = document.createElement('div');
-                segment.style.position = 'absolute';
-                segment.style.left = `${leftPct}%`;
-                segment.style.width = `${widthPct}%`;
-                segment.style.height = '100%';
-                segment.style.backgroundColor = COLOR_MAP[stateStr];
-                segment.className = 'cursor-crosshair hover:brightness-125 transition border-r border-gray-950/10';
-
-                const displayStart = formatTimeStr(new Date(clampedStart * 1000));
-                const displayEnd = formatTimeStr(new Date(clampedEnd * 1000));
-
-                segment.addEventListener('mouseenter', () => tooltip.classList.remove('hidden'));
-                segment.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
-                segment.addEventListener('mousemove', (e) => {
-                    // Position updated directly relative to current viewport bounds
-                    tooltip.style.left = `${e.clientX + 15}px`;
-                    tooltip.style.top = `${e.clientY - 50}px`;
-                    
-                    tooltip.innerHTML = `
-                        <div class="font-bold text-indigo-400">${stateStr.replace('_', ' ').toUpperCase()}</div>
-                        ${chName !== 'N/A' ? `<div class="text-gray-300 font-medium">🔊 ${chName}</div>` : ''}
-                        <div class="text-gray-500 mt-0.5">${displayStart} — ${displayEnd}</div>
-                    `;
-                });
-
-                track.appendChild(segment);
-            });
-        }
-
-        // --- RADAR CONTROLLER ---
-        function calculateAndRenderRadar() {
-            const activeSeconds = {
-                "online": 0, "voice_online": 0, "voice_mute": 0, "voice_deaf": 0, "voice_afk": 0, "voice_alone": 0
-            };
-
-            rawHistory.forEach(item => {
-                const stateStr = REVERSE_STATE_MAP[item[0]];
-                if (stateStr !== "offline" && activeSeconds[stateStr] !== undefined) {
-                    activeSeconds[stateStr] += (item[2] - item[1]);
-                }
-            });
-
-            const labels = Object.keys(activeSeconds).map(s => s.replace('_', ' ').toUpperCase());
-            const dataValues = Object.values(activeSeconds).map(sec => Math.round(sec / 60)); 
-
-            const ctx = document.getElementById('radar-chart-canvas').getContext('2d');
-            
-            if (radarChartInstance) {
-                radarChartInstance.destroy();
-            }
-
-            radarChartInstance = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Total Activity (Minutes)',
-                        data: dataValues,
-                        fill: true, // Dataset polygon area fill flag enabled
-                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                        borderColor: 'rgba(99, 102, 241, 1)',
-                        borderWidth: 2,
-                        pointBackgroundColor: 'rgba(129, 140, 248, 1)',
-                        pointBorderColor: '#fff',
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        r: {
-                            grid: { color: '#374151' },
-                            angleLines: { color: '#374151' },
-                            pointLabels: { color: '#9ca3af', font: { size: 10, weight: 'bold' } },
-                            ticks: { display: false }
-                        }
-                    },
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        // --- HEATMAP CONTROLLER ---
-        function renderHeatmap() {
-            const container = document.getElementById('heatmap-container');
-            container.innerHTML = '';
-
-            const dailyCoefficient = {}; 
-
-            rawHistory.forEach(item => {
-                const stateStr = REVERSE_STATE_MAP[item[0]];
-                if (stateStr === 'offline') return; 
-
-                const startMs = item[1] * 1000;
-                const dateKey = getYYYYMMDD(new Date(startMs)); // Utilizing custom format pipeline
-                dailyCoefficient[dateKey] = (dailyCoefficient[dateKey] || 0) + (item[2] - item[1]);
-            });
-
-            const boxSize = 11;
-            const gap = 3;
-            const width = 53 * (boxSize + gap);
-            const height = 7 * (boxSize + gap);
-
-            let svgHtml = `<svg width="${width}" height="${height}" class="overflow-visible">`;
-
-            const startDate = new Date();
-            startDate.setHours(0, 0, 0, 0); // Clear midnight bound
-            startDate.setTime(startDate.getTime() - 53 * 7 * 24 * 60 * 60 * 1000);
-            startDate.setDate(startDate.getDate() - startDate.getDay()); 
-
-            for (let w = 0; w < 53; w++) {
-                for (let d = 0; d < 7; d++) {
-                    const currentCellDate = new Date(startDate);
-                    currentCellDate.setDate(startDate.getDate() + (w * 7 + d)); // Day increment via safe calendar API
-                    const dateKey = getYYYYMMDD(currentCellDate);
-                    
-                    const activeSeconds = dailyCoefficient[dateKey] || 0;
-                    const coefficient = Math.min(activeSeconds / 86400, 1.0);
-
-                    let fillStyle = '#1f2937'; 
-                    if (coefficient > 0) {
-                        fillStyle = `rgba(34, 197, 94, ${0.15 + coefficient * 0.85})`; 
-                    }
-
-                    const x = w * (boxSize + gap);
-                    const y = d * (boxSize + gap);
-
-                    svgHtml += `
-                        <rect 
-                            x="${x}" y="${y}" width="${boxSize}" height="${boxSize}" rx="2" 
-                            fill="${fillStyle}" stroke="rgba(0,0,0,0.1)" stroke-width="1"
-                            class="transition-all duration-150 hover:stroke-indigo-400 cursor-pointer"
-                            data-date="${dateKey}" data-hours="${(activeSeconds/3600).toFixed(1)}"
-                        />`;
-                }
-            }
-            svgHtml += '</svg>';
-            container.innerHTML = svgHtml;
-
-            container.querySelectorAll('rect').forEach(rect => {
-                rect.addEventListener('mouseenter', (e) => {
-                    const d = rect.getAttribute('data-date');
-                    const h = rect.getAttribute('data-hours');
-                    rect.setAttribute('title', `${d}: ${h} active hours logged`);
-                });
-            });
-        }
-
-        // --- DISPATCHERS ---
-        document.getElementById('timeline-date-picker').addEventListener('change', (e) => {
-            renderTimeline(e.target.value);
-        });
-
-        const initialDatePicker = document.getElementById('timeline-date-picker');
-        renderTimeline(initialDatePicker.value);
-        calculateAndRenderRadar();
-        renderHeatmap();
     </script>
+    <script src="{% static 'public_web/js/user_detail.js' %}"></script>
 </body>
+
 </html>

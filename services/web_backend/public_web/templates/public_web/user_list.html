@@ -1,28 +1,43 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord Users Statistics</title>
+    <title>Discord Users - RainBot Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="{% static 'public_web/css/user_detail.css' %}">
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+<body class="min-h-screen text-gray-100 flex flex-col relative overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
 
-    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <a href="#" class="text-xl font-bold text-indigo-400 tracking-wide">🌧️ RainBot Analytics</a>
-            <div class="space-x-4">
-                <a href="#" class="text-gray-300 hover:text-white transition">Rains History</a>
-                <a href="{% url 'public_web:user_list' %}" class="text-indigo-400 font-medium">Discord Users</a>
+    <!-- Radial Decorative Background Glows -->
+    <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none z-0"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-emerald-600/5 blur-[120px] pointer-events-none z-0"></div>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-40 bg-gray-950/70 border-b border-gray-800/60 backdrop-blur-md px-4 md:px-6 py-4">
+        <div class="w-full flex justify-between items-center">
+            <a href="#" class="text-xl font-bold tracking-wide flex items-center gap-2 hover:opacity-90 transition">
+                <span class="text-2xl">🌧️</span>
+                <span class="text-gradient-indigo font-extrabold">RainBot Analytics</span>
+            </a>
+            <div class="flex items-center gap-6">
+                <a href="#" class="text-sm font-medium text-gray-400 hover:text-indigo-400 transition">Rains History</a>
+                <a href="{% url 'public_web:user_list' %}" class="text-sm font-semibold bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 px-4 py-1.5 rounded-full transition-all">
+                    Discord Users
+                </a>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-6 py-8">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+    <!-- Main Dashboard Container -->
+    <main class="w-full px-4 md:px-6 py-8 flex-1 z-10">
+        
+        <!-- HEADER AND SEARCH GRID -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4 fade-in-up">
             <div>
-                <h1 class="text-3xl font-extrabold tracking-tight">Discord Server Users</h1>
-                <p class="text-gray-400 mt-1">Select a user profile to inspect detailed timeline activity charts.</p>
+                <h1 class="text-3xl font-extrabold tracking-wide text-white">Discord Server Users</h1>
+                <p class="text-xs text-gray-400 mt-1">Select a user profile to inspect detailed timeline activity charts.</p>
             </div>
             
             <div class="relative w-full md:w-80">
@@ -30,50 +45,63 @@
                     type="text" 
                     id="user-search-input" 
                     placeholder="Search by nickname or @username..." 
-                    class="w-full bg-gray-800 text-gray-100 placeholder-gray-500 border border-gray-700 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    class="w-full bg-gray-900/50 text-gray-200 placeholder-gray-500 border border-gray-800 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all backdrop-blur-md shadow-inner text-sm"
                 >
             </div>
         </div>
 
+        <!-- USERS GRID -->
         <div id="users-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {% for user in users %}
                 <div 
-                    class="user-card bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-gray-600 hover:scale-[1.02] transition duration-200 flex flex-col items-center text-center"
-                    /* Записываем оба имени в нижнем регистре для корректной фильтрации */
+                    class="user-card glass-card rounded-2xl p-6 flex flex-col items-center text-center relative overflow-hidden hover:scale-[1.03] duration-300 fade-in-up"
                     data-search-query="{{ user.nickname|lower }} {{ user.username|lower }}"
                 >
+                    <!-- Small subtle background glow inside cards -->
+                    <div class="absolute -right-6 -bottom-6 w-20 h-20 bg-indigo-500/5 rounded-full blur-xl pointer-events-none"></div>
+
                     {% if user.avatar_url %}
-                        <img src="{{ user.avatar_url }}" alt="{{ user.nickname }}" class="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-gray-700">
+                        <img src="{{ user.avatar_url }}" alt="{{ user.nickname }}" class="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-gray-700/60 hover:scale-105 transition-transform duration-300">
                     {% else %}
-                        <div class="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center text-2xl font-bold text-white shadow-lg border-2 border-gray-700">
+                        <div class="w-20 h-20 rounded-full bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-2xl font-bold shadow-lg">
                             {{ user.nickname|slice:":1"|upper }}
                         </div>
                     {% endif %}
 
-                    <h3 class="text-lg font-bold mt-4 text-white truncate max-w-full" title="{{ user.nickname }}">
+                    <h3 class="text-lg font-extrabold mt-4 text-white truncate max-w-full tracking-wide" title="{{ user.nickname }}">
                         {{ user.nickname }}
                     </h3>
-                    <p class="text-sm text-indigo-400 font-medium truncate max-w-full">
+                    <p class="text-sm text-indigo-400 font-semibold truncate max-w-full">
                         @{{ user.username }}
                     </p>
-                    <p class="text-xs text-gray-500 mt-1">ID: {{ user.account_id }}</p>
+                    
+                    <span class="text-[10px] uppercase font-bold text-gray-500 bg-gray-950/40 px-2 py-0.5 rounded border border-gray-800/80 mt-2">
+                        ID: {{ user.account_id }}
+                    </span>
 
-                    <div class="mt-4 w-full">
-                        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-wide 
-                            {% if user.current_status == 'offline' %} bg-gray-900/50 text-gray-400 border border-gray-700
-                            {% elif 'voice' in user.current_status %} bg-green-900/40 text-green-400 border border-green-800
-                            {% else %} bg-indigo-900/40 text-indigo-400 border border-indigo-800 {% endif %}">
-                            {{ user.current_status }}
+                    <div class="mt-4 w-full flex justify-center">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold tracking-wide w-fit
+                            {% if user.current_status == 'offline' %} bg-gray-900/50 text-gray-400 border border-gray-800/80
+                            {% elif 'voice' in user.current_status %} bg-emerald-950/35 text-emerald-400 border border-emerald-900/45
+                            {% else %} bg-indigo-950/35 text-indigo-400 border border-indigo-900/45 {% endif %}">
+                            {% if user.current_status == 'offline' %}Offline
+                            {% elif user.current_status == 'online' %}Online
+                            {% elif user.current_status == 'voice_online' %}Voice Online
+                            {% elif user.current_status == 'voice_mute' %}Voice Muted
+                            {% elif user.current_status == 'voice_deaf' %}Voice Deafened
+                            {% elif user.current_status == 'voice_afk' %}Voice AFK
+                            {% elif user.current_status == 'voice_alone' %}Alone in Voice
+                            {% else %}{{ user.current_status }}{% endif %}
                         </span>
                     </div>
 
-                    <a href="#" class="mt-5 w-full bg-gray-700 hover:bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg transition text-center">
+                    <a href="{% url 'public_web:user_detail' account_id=user.account_id %}" class="mt-5 w-full block text-sm font-semibold bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 py-2 rounded-xl transition-all shadow-md text-center">
                         View Analytics
                     </a>
                 </div>
             {% empty %}
-                <div class="col-span-full text-center py-12 bg-gray-800 rounded-xl border border-gray-700">
-                    <p class="text-gray-400">No registered server accounts detected inside the tracking tables.</p>
+                <div class="col-span-full text-center py-12 glass-card rounded-2xl border border-gray-850">
+                    <p class="text-gray-400 text-sm font-medium">No registered server accounts detected inside the tracking tables.</p>
                 </div>
             {% endfor %}
         </div>
@@ -85,13 +113,11 @@
             const userCards = document.querySelectorAll('.user-card');
 
             searchInput.addEventListener('input', (e) => {
-                // Очищаем поисковый запрос от лишних символов (например, если ввели @username, убираем @)
                 const query = e.target.value.toLowerCase().replace('@', '').trim();
 
                 userCards.forEach(card => {
                     const searchableText = card.getAttribute('data-search-query');
                     
-                    // Если строка поиска пустая или запрос найден в тексте — показываем карточку
                     if (!query || searchableText.includes(query)) {
                         card.classList.remove('hidden');
                     } else {
