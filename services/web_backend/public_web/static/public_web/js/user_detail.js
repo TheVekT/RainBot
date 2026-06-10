@@ -689,15 +689,52 @@ function renderHeatmap() {
     });
 }
 
-// --- DISPATCHERS ---
 document.getElementById('timeline-date-picker').addEventListener('change', (e) => {
-    renderTimeline(e.target.value);
-    calculateAndRenderRadar(e.target.value);
+    const selectedDate = e.target.value;
+    
+    renderTimeline(selectedDate);
+    calculateAndRenderRadar(selectedDate);
     
     // Format selected date nicely in English
-    const selDate = new Date(e.target.value + 'T12:00:00');
+    const selDate = new Date(selectedDate + 'T12:00:00');
     const options = { day: 'numeric', month: 'long', year: 'numeric' };
     document.getElementById('selected-date-display').innerText = selDate.toLocaleDateString('en-US', options);
+
+    // Asynchronously fetch global voice topology mapping for the new date without reloading
+    fetch(window.location.pathname + '?date=' + selectedDate + '&format=json')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Overwrite global JS variable holding the daily server topology
+            globalVoiceData = data;
+            
+            // If the slider is currently active/placed, update the tooltip to reflect the new day's co-presences
+            if (activeSliderTimestamp !== null) {
+                const slider = document.getElementById('timeline-slider');
+                const track = document.getElementById('timeline-track');
+                if (slider && track) {
+                    const rect = track.getBoundingClientRect();
+                    const localStart = new Date(`${selectedDate}T00:00:00`);
+                    const localEnd = new Date(`${selectedDate}T23:59:59.999`);
+                    const dayStartTs = Math.floor(localStart.getTime() / 1000);
+                    const dayEndTs = Math.floor(localEnd.getTime() / 1000);
+
+                    const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
+                    const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
+                    
+                    const pct = (activeSliderTimestamp - currentViewStart) / (currentViewEnd - currentViewStart);
+                    const clientX = rect.left + pct * rect.width;
+                    updateSliderTooltip(activeSliderTimestamp, clientX);
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching global voice data:', err);
+        });
 });
 
 const selectedDateDisp = document.getElementById('selected-date-display');

@@ -218,7 +218,7 @@
     <!-- Initialization and Data Injection -->
     <script>
         const rawHistory = {{ yearly_history_json|safe }};
-        const globalVoiceData = {{ global_voice_json|safe }};
+        let globalVoiceData = {{ global_voice_json|safe }};
         const currentUserAccountId = "{{ user_profile.account_id }}";
     </script>
     <script src="{% static 'public_web/js/user_detail.js' %}"></script>
