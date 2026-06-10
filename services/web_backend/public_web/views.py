@@ -34,18 +34,24 @@ STATE_MAP = {
 }
 
 def user_detail_view(request, account_id):
-    """
-    Renders the unified statistical dashboard for a specific Discord user.
-    Uses binary compressed zlib layer over Django cache for yearly tracking logs.
-    """
     user = get_object_or_404(DiscordAccount, account_id=account_id)
     
-    # Ключ кэша для хранения несдвинутых UTC-данных пользователя за год
-    cache_key = f"user_binary_history_{account_id}"
-    compressed_data = cache.get(cache_key)
+    date_str = request.GET.get('date')
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = timezone.now().date()
+    else:
+        target_date = timezone.now().date()
+        
+    target_date_str = target_date.strftime('%Y-%m-%d')
+    today_str = timezone.now().strftime('%Y-%m-%d')
 
-    if compressed_data is None:
-        # Если кэша нет — берем скользящее окно за последние 365 дней
+    user_cache_key = f"user_safe_history_v1_{account_id}"
+    compressed_user_data = cache.get(user_cache_key)
+
+    if compressed_user_data is None:
         now = timezone.now()
         one_year_ago = now - timedelta(days=365)
         
@@ -54,40 +60,66 @@ def user_detail_view(request, account_id):
             start_time__gte=one_year_ago
         ).select_related('channel').order_by('start_time')
 
-        # text
         raw_intervals = []
         for p in presences:
             state_int = STATE_MAP.get(p.state, 0)
             start_ts = int(p.start_time.timestamp())
             end_ts = int(p.end_time.timestamp())
             ch_name = p.channel.name if p.channel else None
-            
             raw_intervals.append((state_int, start_ts, end_ts, ch_name))
 
-        # Бинарная сериализация и жесткое сжатие потока через zlib
-        serialized = pickle.dumps(raw_intervals)
-        compressed_data = zlib.compress(serialized)
-        
-        # Сохраняем сжатый бинарный блоб в кэш ровно на 24 часа (86400 секунд)
-        cache.set(cache_key, compressed_data, timeout=86400)
+        serialized_user = json.dumps(raw_intervals).encode('utf-8')
+        compressed_user_data = zlib.compress(serialized_user)
+        cache.set(user_cache_key, compressed_user_data, timeout=86400)
         history_source = "database"
     else:
         history_source = "cache"
 
-    # Декомпрессия данных перед передачей в контекст шаблона
-    decompressed = zlib.decompress(compressed_data)
-    unpacked_history = pickle.loads(decompressed)
+    # FIXED: Passed as positional-only argument to prevent zlib engine signature rejection
+    user_history_json_string = zlib.decompress(compressed_user_data).decode('utf-8')
 
-    # <- ИЗМЕНЕНО: Конвертируем питоновский список кортежей в строку JSON-массива
-    history_json_string = json.dumps(unpacked_history)
+    day_cache_key = f"global_server_voice_safe_day_v1_{target_date_str}"
+    compressed_day_data = cache.get(day_cache_key)
 
-    # Передаем дату для инициализации календаря (сегодняшний день по UTC бэкенда)
-    today_str = timezone.now().strftime('%Y-%m-%d')
+    if compressed_day_data is None:
+        day_start_utc = timezone.make_aware(datetime.combine(target_date - timedelta(days=1), datetime.min.time()))
+        day_end_utc = timezone.make_aware(datetime.combine(target_date + timedelta(days=1), datetime.max.time()))
+
+        co_presences = DiscordUserPresence.objects.filter(
+            start_time__lt=day_end_utc,
+            end_time__gt=day_start_utc,
+            channel__isnull=False
+        ).select_related('account').order_by('start_time')
+
+        day_intervals = []
+        for cp in co_presences:
+            cp_state_int = STATE_MAP.get(cp.state, 0)
+            cp_start_ts = int(cp.start_time.timestamp())
+            cp_end_ts = int(cp.end_time.timestamp())
+            
+            day_intervals.append((
+                str(cp.account_id),
+                cp.account.nickname,
+                cp_state_int,
+                cp_start_ts,
+                cp_end_ts,
+                str(cp.channel_id) if cp.channel_id else None
+            ))
+
+        serialized_day = json.dumps(day_intervals).encode('utf-8')
+        compressed_day_data = zlib.compress(serialized_day)
+        
+        day_cache_timeout = 15 if target_date_str == today_str else 86400
+        cache.set(day_cache_key, compressed_day_data, timeout=day_cache_timeout)
+
+    day_history_json_string = zlib.decompress(compressed_day_data).decode('utf-8')
 
     context = {
         'user_profile': user,
         'today_date': today_str,
-        'yearly_history_json': history_json_string,  # <- ИЗМЕНЕНО: Передаем строку, а не объект списка
+        'selected_date': target_date_str,
+        'yearly_history_json': user_history_json_string,
+        'global_voice_json': day_history_json_string,
         'history_source': history_source,
     }
     return render(request, 'public_web/user_detail.html', context)

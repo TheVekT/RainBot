@@ -23,8 +23,179 @@ function formatTimeStr(dateObj) {
     return dateObj.toTimeString().split(' ')[0];
 }
 
+function formatDuration(seconds) {
+    if (seconds <= 0) return '0s';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    
+    if (h > 0) {
+        return `${h}h${m > 0 ? `, ${m}m` : ''}`;
+    }
+    if (m > 0) {
+        return `${m}m`;
+    }
+    return `${s}s`;
+}
+
+let currentTimelineDate = null;
+let zoomStartTs = null;
+let zoomEndTs = null;
+let activeSliderTimestamp = null;
+let isDraggingSlider = false;
+
+function updateTimelineLabels(startTs, endTs) {
+    const container = document.getElementById('timeline-labels');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const steps = 6;
+    for (let i = 0; i <= steps; i++) {
+        const ts = startTs + (endTs - startTs) * (i / steps);
+        const date = new Date(ts * 1000);
+        const hh = String(date.getHours()).padStart(2, '0');
+        const mm = String(date.getMinutes()).padStart(2, '0');
+        
+        const span = document.createElement('span');
+        span.innerText = `${hh}:${mm}`;
+        container.appendChild(span);
+    }
+}
+
+function updateSliderTooltip(timestamp, clientX) {
+    const tooltip = document.getElementById('slider-tooltip');
+    const timeEl = document.getElementById('slider-tooltip-time');
+    const channelLabelEl = document.getElementById('slider-tooltip-channel-label');
+    const usersEl = document.getElementById('slider-tooltip-users');
+    
+    if (!tooltip || !timeEl || !channelLabelEl || !usersEl) return;
+    
+    // Format timestamp as time string: HH:MM:SS
+    const date = new Date(timestamp * 1000);
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    timeEl.innerText = `${hh}:${mm}:${ss}`;
+    
+    // Find active voice users at this second (using half-open interval [start, end) to prevent transition overlaps)
+    const activeVoiceUsersRaw = (typeof globalVoiceData !== 'undefined' ? globalVoiceData : []).filter(item => {
+        return timestamp >= item[3] && timestamp < item[4];
+    });
+    
+    // De-duplicate users by account_id to be absolutely sure no one is shown twice
+    const seenUsers = new Set();
+    const activeVoiceUsers = [];
+    for (const user of activeVoiceUsersRaw) {
+        const userId = String(user[0]);
+        if (!seenUsers.has(userId)) {
+            seenUsers.add(userId);
+            activeVoiceUsers.push(user);
+        }
+    }
+    
+    // Find the main user's presence to get channel_id
+    const mainUserPresence = activeVoiceUsers.find(item => String(item[0]) === String(typeof currentUserAccountId !== 'undefined' ? currentUserAccountId : ''));
+    const currentChannelId = mainUserPresence ? mainUserPresence[5] : null;
+    
+    if (!currentChannelId) {
+        channelLabelEl.innerText = 'Not in voice channel';
+        channelLabelEl.className = 'text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5';
+        usersEl.innerHTML = '<div class="text-[11px] text-gray-500 italic mt-0.5">No co-listeners</div>';
+    } else {
+        // Find channel name from rawHistory
+        const mainUserHistoryPeriod = rawHistory.find(item => {
+            return timestamp >= item[1] && timestamp <= item[2];
+        });
+        const channelName = (mainUserHistoryPeriod && mainUserHistoryPeriod[3]) ? mainUserHistoryPeriod[3] : `Channel #${currentChannelId}`;
+        
+        channelLabelEl.innerText = `🔊 ${channelName}`;
+        channelLabelEl.className = 'text-[10px] text-indigo-400 font-bold uppercase tracking-wider mt-0.5 truncate';
+        
+        // Find channel participants
+        const participants = activeVoiceUsers.filter(item => {
+            return item[5] === currentChannelId;
+        });
+        
+        if (participants.length === 0) {
+            usersEl.innerHTML = '<div class="text-[11px] text-gray-500 italic mt-0.5">Alone in room</div>';
+        } else {
+            usersEl.innerHTML = '';
+            participants.forEach(user => {
+                const isMainUser = String(user[0]) === String(typeof currentUserAccountId !== 'undefined' ? currentUserAccountId : '');
+                const nickname = user[1] || 'Unknown User';
+                const stateInt = user[2];
+                const stateStr = REVERSE_STATE_MAP[stateInt] || 'unknown';
+                
+                const userRow = document.createElement('div');
+                userRow.className = `flex items-center justify-between text-[11px] py-0.5 ${isMainUser ? 'text-indigo-300 font-bold' : 'text-gray-300'}`;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'truncate max-w-[130px]';
+                nameSpan.innerText = nickname;
+                
+                const statusContainer = document.createElement('div');
+                statusContainer.className = 'flex items-center gap-1';
+                
+                const MIC_MUTE_SVG = `
+                <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" stroke="#ef4444" stroke-width="2.5" />
+                </svg>
+                `;
+
+                const DEAF_SVG = `
+                <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.5a6.5 6.5 0 01-6.5-6.5V11a6.5 6.5 0 1113 0v1a6.5 6.5 0 01-6.5 6.5z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h1.5a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5H4.5A1.5 1.5 0 013 16.5v-3A1.5 1.5 0 014.5 12zM18 12h1.5a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5H18a1.5 1.5 0 01-1.5-1.5v-3A1.5 1.5 0 0118 12z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" stroke="#ef4444" stroke-width="2.5" />
+                </svg>
+                `;
+
+                if (stateStr === 'voice_mute') {
+                    statusContainer.innerHTML = MIC_MUTE_SVG;
+                } else if (stateStr === 'voice_deaf') {
+                    statusContainer.innerHTML = MIC_MUTE_SVG + DEAF_SVG;
+                }
+                
+                userRow.appendChild(nameSpan);
+                userRow.appendChild(statusContainer);
+                
+                usersEl.appendChild(userRow);
+            });
+        }
+    }
+    
+    // Position tooltip
+    const trackRect = document.getElementById('timeline-track').getBoundingClientRect();
+    const tooltipWidth = 208; // w-52 is 208px
+    
+    const sliderLeft = clientX - trackRect.left;
+    let tooltipLeft = sliderLeft - tooltipWidth / 2;
+    
+    // Clamp tooltipLeft within track boundaries to prevent screen overflow
+    const minLeft = 0;
+    const maxLeft = trackRect.width - tooltipWidth;
+    tooltipLeft = Math.max(minLeft, Math.min(maxLeft, tooltipLeft));
+    
+    tooltip.style.left = `${tooltipLeft}px`;
+    tooltip.classList.remove('hidden');
+    
+    // Adjust tooltip arrow to point exactly to the slider
+    const arrow = document.getElementById('slider-tooltip-arrow');
+    if (arrow) {
+        const arrowLeft = sliderLeft - tooltipLeft;
+        arrow.style.left = `${arrowLeft}px`;
+    }
+}
+
 // --- TIMELINE CONTROLLER ---
 function renderTimeline(targetDateStr) {
+    if (currentTimelineDate !== targetDateStr) {
+        currentTimelineDate = targetDateStr;
+        zoomStartTs = null;
+        zoomEndTs = null;
+    }
+
     const track = document.getElementById('timeline-track');
     track.innerHTML = '';
 
@@ -33,14 +204,19 @@ function renderTimeline(targetDateStr) {
     const localStart = new Date(`${targetDateStr}T00:00:00`);
     const localEnd = new Date(`${targetDateStr}T23:59:59.999`);
 
-    const viewStartTs = Math.floor(localStart.getTime() / 1000);
-    const viewEndTs = Math.floor(localEnd.getTime() / 1000);
+    const dayStartTs = Math.floor(localStart.getTime() / 1000);
+    const dayEndTs = Math.floor(localEnd.getTime() / 1000);
+
+    const viewStartTs = zoomStartTs !== null ? zoomStartTs : dayStartTs;
+    const viewEndTs = zoomEndTs !== null ? zoomEndTs : dayEndTs;
     const viewDuration = viewEndTs - viewStartTs;
+
+    updateTimelineLabels(viewStartTs, viewEndTs);
 
     const visiblePeriods = rawHistory.filter(item => item[1] < viewEndTs && item[2] > viewStartTs);
 
     if (visiblePeriods.length === 0) {
-        track.innerHTML = `<div class="w-full h-full bg-gray-700/20 flex items-center justify-center text-xs text-gray-400">No presence logs available for this date</div>`;
+        track.innerHTML = `<div class="w-full h-full bg-gray-700/20 flex items-center justify-center text-xs text-gray-400">No presence logs available for this period</div>`;
         return;
     }
 
@@ -87,6 +263,20 @@ function renderTimeline(targetDateStr) {
 
         track.appendChild(segment);
     });
+
+    // Update slider position if active
+    const slider = document.getElementById('timeline-slider');
+    const sliderTooltip = document.getElementById('slider-tooltip');
+    if (slider) {
+        if (activeSliderTimestamp !== null && activeSliderTimestamp >= viewStartTs && activeSliderTimestamp <= viewEndTs) {
+            const pct = (activeSliderTimestamp - viewStartTs) / viewDuration;
+            slider.style.left = `${pct * 100}%`;
+            slider.classList.remove('hidden');
+        } else {
+            slider.classList.add('hidden');
+            if (sliderTooltip) sliderTooltip.classList.add('hidden');
+        }
+    }
 }
 
 // --- RADAR CONTROLLER ---
@@ -118,10 +308,7 @@ function calculateAndRenderRadar(targetDateStr) {
     });
 
     const labels = Object.keys(activeSeconds).map(s => s.replace('_', ' ').toUpperCase());
-    const dataValues = Object.values(activeSeconds).map(sec => {
-        const mins = Math.round(sec / 60);
-        return mins > 0 ? mins : null; // Map 0 to null to allow spanGaps to connect active segments
-    });
+    const dataValues = Object.values(activeSeconds);
 
     // Populate day quick stats panel (if elements exist)
     const activeMins = Object.values(activeSeconds).reduce((a, b) => a + b, 0);
@@ -154,21 +341,25 @@ function calculateAndRenderRadar(targetDateStr) {
     const selDate = new Date(targetDateStr + 'T12:00:00');
     const dateStrFormatted = selDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 
+    const maxVal = Math.max(...dataValues, 600);
+    const minVal = -0.15 * maxVal;
+
     radarChartInstance = new Chart(ctx, {
         type: 'radar',
         data: {
             labels: labels,
             datasets: [{
-                label: `Activity on ${dateStrFormatted} (Minutes)`,
+                label: `Activity on ${dateStrFormatted}`,
                 data: dataValues,
-                fill: 'origin',
+                fill: 'start',
                 spanGaps: true,
                 backgroundColor: 'rgba(99, 102, 241, 0.22)',
                 borderColor: 'rgba(99, 102, 241, 0.85)',
                 borderWidth: 1.5,
                 pointBackgroundColor: 'rgba(129, 140, 248, 1)',
                 pointBorderColor: '#fff',
-                pointRadius: 3
+                pointRadius: dataValues.map(v => v > 0 ? 3 : 0),
+                pointHoverRadius: dataValues.map(v => v > 0 ? 4 : 0)
             }]
         },
         options: {
@@ -176,14 +367,26 @@ function calculateAndRenderRadar(targetDateStr) {
             maintainAspectRatio: false,
             scales: {
                 r: {
-                    min: 0,
+                    min: minVal,
+                    suggestedMax: 600,
                     grid: { color: 'rgba(75, 85, 99, 0.25)' },
                     angleLines: { color: 'rgba(75, 85, 99, 0.25)' },
                     pointLabels: { color: '#9ca3af', font: { family: 'Outfit', size: 9, weight: 'bold' } },
                     ticks: { display: false }
                 }
             },
-            plugins: { legend: { display: false } }
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.raw;
+                            return `${label}: ${formatDuration(value)}`;
+                        }
+                    }
+                }
+            }
         }
     });
 }
@@ -519,3 +722,187 @@ document.getElementById('selected-date-display').innerText = initDateObj.toLocal
 
 calculateAndRenderRadar(initialDatePicker.value);
 renderHeatmap();
+
+// Timeline selection zoom and slider logic
+const trackElement = document.getElementById('timeline-track');
+const sliderElement = document.getElementById('timeline-slider');
+const sliderTooltip = document.getElementById('slider-tooltip');
+
+if (trackElement && sliderElement) {
+    let isDraggingZoom = false;
+    let zoomStartX = 0;
+    let zoomOverlay = null;
+    let trackMouseDownX = 0;
+
+    trackElement.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        
+        const rect = trackElement.getBoundingClientRect();
+        trackMouseDownX = e.clientX;
+        zoomStartX = e.clientX - rect.left;
+        isDraggingZoom = true;
+
+        zoomOverlay = document.createElement('div');
+        zoomOverlay.style.position = 'absolute';
+        zoomOverlay.style.top = '0';
+        zoomOverlay.style.height = '100%';
+        zoomOverlay.style.left = `${zoomStartX}px`;
+        zoomOverlay.style.width = '0px';
+        zoomOverlay.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
+        zoomOverlay.style.borderLeft = '1px solid rgba(99, 102, 241, 0.6)';
+        zoomOverlay.style.borderRight = '1px solid rgba(99, 102, 241, 0.6)';
+        zoomOverlay.style.pointerEvents = 'none';
+        zoomOverlay.style.zIndex = '10';
+        trackElement.appendChild(zoomOverlay);
+        
+        e.preventDefault();
+    });
+
+    sliderElement.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation(); // Stop zoom drag from starting
+        isDraggingSlider = true;
+        e.preventDefault();
+    });
+
+    sliderElement.addEventListener('mouseenter', () => {
+        if (activeSliderTimestamp !== null) {
+            const rect = trackElement.getBoundingClientRect();
+            const localStart = new Date(`${currentTimelineDate}T00:00:00`);
+            const localEnd = new Date(`${currentTimelineDate}T23:59:59.999`);
+            const dayStartTs = Math.floor(localStart.getTime() / 1000);
+            const dayEndTs = Math.floor(localEnd.getTime() / 1000);
+
+            const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
+            const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
+            
+            const pct = (activeSliderTimestamp - currentViewStart) / (currentViewEnd - currentViewStart);
+            const clientX = rect.left + pct * rect.width;
+            updateSliderTooltip(activeSliderTimestamp, clientX);
+        }
+    });
+
+    sliderElement.addEventListener('mouseleave', () => {
+        if (!isDraggingSlider && sliderTooltip) {
+            sliderTooltip.classList.add('hidden');
+        }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        const rect = trackElement.getBoundingClientRect();
+        
+        if (isDraggingZoom && zoomOverlay) {
+            const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const left = Math.min(zoomStartX, currentX);
+            const width = Math.abs(zoomStartX - currentX);
+            zoomOverlay.style.left = `${left}px`;
+            zoomOverlay.style.width = `${width}px`;
+        }
+        
+        if (isDraggingSlider) {
+            const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            sliderElement.style.left = `${(currentX / rect.width) * 100}%`;
+            
+            const localStart = new Date(`${currentTimelineDate}T00:00:00`);
+            const localEnd = new Date(`${currentTimelineDate}T23:59:59.999`);
+            const dayStartTs = Math.floor(localStart.getTime() / 1000);
+            const dayEndTs = Math.floor(localEnd.getTime() / 1000);
+
+            const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
+            const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
+            const currentViewDur = currentViewEnd - currentViewStart;
+            
+            const pct = currentX / rect.width;
+            activeSliderTimestamp = Math.floor(currentViewStart + currentViewDur * pct);
+            
+            updateSliderTooltip(activeSliderTimestamp, rect.left + currentX);
+        }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        const rect = trackElement.getBoundingClientRect();
+        
+        if (isDraggingZoom) {
+            isDraggingZoom = false;
+            
+            if (zoomOverlay) {
+                const overlayWidth = parseFloat(zoomOverlay.style.width);
+                const overlayLeft = parseFloat(zoomOverlay.style.left);
+                
+                zoomOverlay.remove();
+                zoomOverlay = null;
+
+                const dragDistance = Math.abs(e.clientX - trackMouseDownX);
+
+                if (dragDistance <= 8) {
+                    // It's a click! Place the slider
+                    const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                    sliderElement.style.left = `${(clickX / rect.width) * 100}%`;
+                    sliderElement.classList.remove('hidden');
+
+                    const localStart = new Date(`${currentTimelineDate}T00:00:00`);
+                    const localEnd = new Date(`${currentTimelineDate}T23:59:59.999`);
+                    const dayStartTs = Math.floor(localStart.getTime() / 1000);
+                    const dayEndTs = Math.floor(localEnd.getTime() / 1000);
+
+                    const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
+                    const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
+                    const currentViewDur = currentViewEnd - currentViewStart;
+                    
+                    const pct = clickX / rect.width;
+                    activeSliderTimestamp = Math.floor(currentViewStart + currentViewDur * pct);
+                    
+                    updateSliderTooltip(activeSliderTimestamp, rect.left + clickX);
+                } else if (overlayWidth > 10) {
+                    // Zoom logic
+                    const localStart = new Date(`${currentTimelineDate}T00:00:00`);
+                    const localEnd = new Date(`${currentTimelineDate}T23:59:59.999`);
+                    const dayStartTs = Math.floor(localStart.getTime() / 1000);
+                    const dayEndTs = Math.floor(localEnd.getTime() / 1000);
+
+                    const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
+                    const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
+                    const currentViewDur = currentViewEnd - currentViewStart;
+
+                    const leftPct = overlayLeft / rect.width;
+                    const rightPct = (overlayLeft + overlayWidth) / rect.width;
+
+                    const newStartTs = Math.floor(currentViewStart + currentViewDur * leftPct);
+                    const newEndTs = Math.floor(currentViewStart + currentViewDur * rightPct);
+
+                    if (newEndTs - newStartTs >= 60) {
+                        zoomStartTs = newStartTs;
+                        zoomEndTs = newEndTs;
+                        renderTimeline(currentTimelineDate);
+                    }
+                }
+            }
+        }
+        
+        if (isDraggingSlider) {
+            isDraggingSlider = false;
+            // Hide tooltip if cursor is not over the slider element
+            const rectSlider = sliderElement.getBoundingClientRect();
+            const isHovering = (
+                e.clientX >= rectSlider.left && 
+                e.clientX <= rectSlider.right && 
+                e.clientY >= rectSlider.top && 
+                e.clientY <= rectSlider.bottom
+            );
+            if (!isHovering && sliderTooltip) {
+                sliderTooltip.classList.add('hidden');
+            }
+        }
+    });
+
+    trackElement.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        // Right click resets zoom, hides slider
+        zoomStartTs = null;
+        zoomEndTs = null;
+        activeSliderTimestamp = null;
+        sliderElement.classList.add('hidden');
+        if (sliderTooltip) sliderTooltip.classList.add('hidden');
+        renderTimeline(currentTimelineDate);
+    });
+}

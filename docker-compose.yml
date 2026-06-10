@@ -30,7 +30,7 @@ services:
       - static_data:/app/staticfiles
     command: >
       sh -c "python manage.py collectstatic --noinput &&
-             gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+             gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 1"
 
   orchestrator_grpc:
     build:
@@ -107,7 +107,7 @@ services:
     container_name: rainbot_nginx
     restart: always
     ports:
-      # Open port 80 for testing
+      # Open port 80 for testing without cloudflare
       - "80:80"
     depends_on:
       - web_backend

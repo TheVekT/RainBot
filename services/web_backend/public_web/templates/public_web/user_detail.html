@@ -8,6 +8,7 @@
     <title>{{ user_profile.nickname }} - Detailed Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="shortcut icon" type="image/x-icon" href="{% static 'public_web/rake.ico' %}">
     <link rel="stylesheet" href="{% static 'public_web/css/user_detail.css' %}">
 </head>
 
@@ -127,7 +128,25 @@
                         <div id="timeline-track"
                             class="relative w-full h-12 bg-gray-950/80 rounded-xl overflow-hidden border border-gray-800/80 flex shadow-inner">
                         </div>
-                        <div class="relative w-full flex justify-between px-1 mt-2.5 text-[10px] text-gray-500 font-bold tracking-wider">
+
+                        <!-- Timeline Slider -->
+                        <div id="timeline-slider" class="absolute top-0 h-12 w-0.5 bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] cursor-ew-resize hidden z-30 select-none">
+                            <!-- Drag Handle -->
+                            <div class="absolute -top-1 -left-[5px] w-3 h-3 bg-white border-2 border-indigo-500 rounded-full shadow-[0_0_4px_rgba(99,102,241,0.5)]"></div>
+                        </div>
+
+                        <!-- Slider Tooltip -->
+                        <div id="slider-tooltip" class="absolute bottom-[80px] w-52 bg-gray-950/95 border border-gray-800 text-xs rounded-xl p-3 shadow-2xl pointer-events-none text-gray-200 font-medium backdrop-blur-md hidden z-40 transition-all duration-75">
+                            <div id="slider-tooltip-arrow" class="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-gray-950 border-r border-b border-gray-800 rotate-45"></div>
+                            <div class="flex flex-col gap-1.5" id="slider-tooltip-content">
+                                <div class="font-bold text-indigo-400 text-center border-b border-gray-800/60 pb-1" id="slider-tooltip-time">12:34:56</div>
+                                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5" id="slider-tooltip-channel-label">N/A</div>
+                                <div class="flex flex-col gap-1 mt-1" id="slider-tooltip-users">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="timeline-labels" class="relative w-full flex justify-between px-1 mt-2.5 text-[10px] text-gray-500 font-bold tracking-wider">
                             <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span>
                         </div>
                     </div>
@@ -199,6 +218,8 @@
     <!-- Initialization and Data Injection -->
     <script>
         const rawHistory = {{ yearly_history_json|safe }};
+        const globalVoiceData = {{ global_voice_json|safe }};
+        const currentUserAccountId = "{{ user_profile.account_id }}";
     </script>
     <script src="{% static 'public_web/js/user_detail.js' %}"></script>
 </body>
