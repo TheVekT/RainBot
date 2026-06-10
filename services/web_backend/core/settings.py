@@ -30,8 +30,11 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'default-unsafe-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [os.getenv('DOMAIN', 'localhost')]
 
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{os.getenv("DOMAIN", "localhost")}',
+]
 
 # Application definition
 

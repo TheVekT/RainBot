@@ -24,6 +24,7 @@ from modules.users_stats.database.pg_impl import PostgresPresenceRepository
 from modules.users_stats.stats import UserPresenceTracker
 from modules.youtube_player import YouTubePlayer
 from cogs.music_cog import MusicCog
+from cogs.stats_cog import StatsCog
 from rain_notify_config_provider import DatabaseConfigProvider
 
 # Configure logging
@@ -99,6 +100,9 @@ async def main() -> None:
         youtube_player = YouTubePlayer(bot, voice_manager)
         music_cog = MusicCog(bot, youtube_player)
         bot.add_cog(music_cog)
+        
+        stats_cog = StatsCog(bot)
+        bot.add_cog(stats_cog)
         
         # 7. Initialize the logic router
         rain_router = RainEventRouter(
