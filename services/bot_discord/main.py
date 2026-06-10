@@ -9,6 +9,7 @@ and starts the gRPC server to listen for orchestrator events.
 import asyncio
 import logging
 import os
+import signal
 import sys
 
 import asyncpg
@@ -38,6 +39,22 @@ logger = logging.getLogger(__name__)
 async def main() -> None:
     """Main asynchronous entry point for the bot and gRPC server."""
     logger.info("Initializing Discord bot service...")
+
+    # Register signal handlers for graceful shutdown using task cancellation
+    loop = asyncio.get_running_loop()
+    main_task = asyncio.current_task()
+
+    def handle_shutdown(signum):
+        logger.info("Received shutdown signal (signal %s). Initiating graceful shutdown...", signum)
+        if main_task and not main_task.done():
+            main_task.cancel()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, lambda s=sig: handle_shutdown(s))
+        except NotImplementedError:
+            # Fallback for Windows where add_signal_handler is not implemented
+            signal.signal(sig, lambda signum, frame: loop.call_soon_threadsafe(handle_shutdown, signum))
 
     # 1. Load environment variables
     db_url = os.getenv("DATABASE_URL")
@@ -133,6 +150,9 @@ async def main() -> None:
         if presence_tracker:
             logger.info("Stopping user presence tracker...")
             await presence_tracker.stop()
+        if 'bot' in locals() and bot:
+            logger.info("Closing Discord bot...")
+            await bot.close()
         if db_pool:
             logger.info("Closing database connection pool...")
             await db_pool.close()
@@ -142,5 +162,5 @@ async def main() -> None:
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Service interrupted by user.")
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("Service interrupted and shut down cleanly.")

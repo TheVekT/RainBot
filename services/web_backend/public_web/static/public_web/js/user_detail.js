@@ -28,7 +28,7 @@ function formatDuration(seconds) {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    
+
     if (h > 0) {
         return `${h}h${m > 0 ? `, ${m}m` : ''}`;
     }
@@ -48,14 +48,14 @@ function updateTimelineLabels(startTs, endTs) {
     const container = document.getElementById('timeline-labels');
     if (!container) return;
     container.innerHTML = '';
-    
+
     const steps = 6;
     for (let i = 0; i <= steps; i++) {
         const ts = startTs + (endTs - startTs) * (i / steps);
         const date = new Date(ts * 1000);
         const hh = String(date.getHours()).padStart(2, '0');
         const mm = String(date.getMinutes()).padStart(2, '0');
-        
+
         const span = document.createElement('span');
         span.innerText = `${hh}:${mm}`;
         container.appendChild(span);
@@ -67,21 +67,21 @@ function updateSliderTooltip(timestamp, clientX) {
     const timeEl = document.getElementById('slider-tooltip-time');
     const channelLabelEl = document.getElementById('slider-tooltip-channel-label');
     const usersEl = document.getElementById('slider-tooltip-users');
-    
+
     if (!tooltip || !timeEl || !channelLabelEl || !usersEl) return;
-    
+
     // Format timestamp as time string: HH:MM:SS
     const date = new Date(timestamp * 1000);
     const hh = String(date.getHours()).padStart(2, '0');
     const mm = String(date.getMinutes()).padStart(2, '0');
     const ss = String(date.getSeconds()).padStart(2, '0');
     timeEl.innerText = `${hh}:${mm}:${ss}`;
-    
+
     // Find active voice users at this second (using half-open interval [start, end) to prevent transition overlaps)
     const activeVoiceUsersRaw = (typeof globalVoiceData !== 'undefined' ? globalVoiceData : []).filter(item => {
         return timestamp >= item[3] && timestamp < item[4];
     });
-    
+
     // De-duplicate users by account_id to be absolutely sure no one is shown twice
     const seenUsers = new Set();
     const activeVoiceUsers = [];
@@ -92,11 +92,11 @@ function updateSliderTooltip(timestamp, clientX) {
             activeVoiceUsers.push(user);
         }
     }
-    
+
     // Find the main user's presence to get channel_id
     const mainUserPresence = activeVoiceUsers.find(item => String(item[0]) === String(typeof currentUserAccountId !== 'undefined' ? currentUserAccountId : ''));
     const currentChannelId = mainUserPresence ? mainUserPresence[5] : null;
-    
+
     if (!currentChannelId) {
         channelLabelEl.innerText = 'Not in voice channel';
         channelLabelEl.className = 'text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5';
@@ -107,15 +107,28 @@ function updateSliderTooltip(timestamp, clientX) {
             return timestamp >= item[1] && timestamp <= item[2];
         });
         const channelName = (mainUserHistoryPeriod && mainUserHistoryPeriod[3]) ? mainUserHistoryPeriod[3] : `Channel #${currentChannelId}`;
-        
+
         channelLabelEl.innerText = `🔊 ${channelName}`;
         channelLabelEl.className = 'text-[10px] text-indigo-400 font-bold uppercase tracking-wider mt-0.5 truncate';
-        
+
         // Find channel participants
         const participants = activeVoiceUsers.filter(item => {
             return item[5] === currentChannelId;
         });
-        
+
+        // Sort participants: current user first, then alphabetically by nickname
+        participants.sort((a, b) => {
+            const isAMain = String(a[0]) === String(typeof currentUserAccountId !== 'undefined' ? currentUserAccountId : '');
+            const isBMain = String(b[0]) === String(typeof currentUserAccountId !== 'undefined' ? currentUserAccountId : '');
+            
+            if (isAMain && !isBMain) return -1;
+            if (!isAMain && isBMain) return 1;
+            
+            const nameA = (a[1] || '').toLowerCase();
+            const nameB = (b[1] || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+
         if (participants.length === 0) {
             usersEl.innerHTML = '<div class="text-[11px] text-gray-500 italic mt-0.5">Alone in room</div>';
         } else {
@@ -125,17 +138,17 @@ function updateSliderTooltip(timestamp, clientX) {
                 const nickname = user[1] || 'Unknown User';
                 const stateInt = user[2];
                 const stateStr = REVERSE_STATE_MAP[stateInt] || 'unknown';
-                
+
                 const userRow = document.createElement('div');
                 userRow.className = `flex items-center justify-between text-[11px] py-0.5 ${isMainUser ? 'text-indigo-300 font-bold' : 'text-gray-300'}`;
-                
+
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'truncate max-w-[130px]';
                 nameSpan.innerText = nickname;
-                
+
                 const statusContainer = document.createElement('div');
                 statusContainer.className = 'flex items-center gap-1';
-                
+
                 const MIC_MUTE_SVG = `
                 <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -156,30 +169,30 @@ function updateSliderTooltip(timestamp, clientX) {
                 } else if (stateStr === 'voice_deaf') {
                     statusContainer.innerHTML = MIC_MUTE_SVG + DEAF_SVG;
                 }
-                
+
                 userRow.appendChild(nameSpan);
                 userRow.appendChild(statusContainer);
-                
+
                 usersEl.appendChild(userRow);
             });
         }
     }
-    
+
     // Position tooltip
     const trackRect = document.getElementById('timeline-track').getBoundingClientRect();
     const tooltipWidth = 208; // w-52 is 208px
-    
+
     const sliderLeft = clientX - trackRect.left;
     let tooltipLeft = sliderLeft - tooltipWidth / 2;
-    
+
     // Clamp tooltipLeft within track boundaries to prevent screen overflow
     const minLeft = 0;
     const maxLeft = trackRect.width - tooltipWidth;
     tooltipLeft = Math.max(minLeft, Math.min(maxLeft, tooltipLeft));
-    
+
     tooltip.style.left = `${tooltipLeft}px`;
     tooltip.classList.remove('hidden');
-    
+
     // Adjust tooltip arrow to point exactly to the slider
     const arrow = document.getElementById('slider-tooltip-arrow');
     if (arrow) {
@@ -379,7 +392,7 @@ function calculateAndRenderRadar(targetDateStr) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             const label = context.dataset.label || '';
                             const value = context.raw;
                             return `${label}: ${formatDuration(value)}`;
@@ -691,10 +704,10 @@ function renderHeatmap() {
 
 document.getElementById('timeline-date-picker').addEventListener('change', (e) => {
     const selectedDate = e.target.value;
-    
+
     renderTimeline(selectedDate);
     calculateAndRenderRadar(selectedDate);
-    
+
     // Format selected date nicely in English
     const selDate = new Date(selectedDate + 'T12:00:00');
     const options = { day: 'numeric', month: 'long', year: 'numeric' };
@@ -711,7 +724,7 @@ document.getElementById('timeline-date-picker').addEventListener('change', (e) =
         .then(data => {
             // Overwrite global JS variable holding the daily server topology
             globalVoiceData = data;
-            
+
             // If the slider is currently active/placed, update the tooltip to reflect the new day's co-presences
             if (activeSliderTimestamp !== null) {
                 const slider = document.getElementById('timeline-slider');
@@ -725,7 +738,7 @@ document.getElementById('timeline-date-picker').addEventListener('change', (e) =
 
                     const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
                     const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
-                    
+
                     const pct = (activeSliderTimestamp - currentViewStart) / (currentViewEnd - currentViewStart);
                     const clientX = rect.left + pct * rect.width;
                     updateSliderTooltip(activeSliderTimestamp, clientX);
@@ -773,7 +786,7 @@ if (trackElement && sliderElement) {
 
     trackElement.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
-        
+
         const rect = trackElement.getBoundingClientRect();
         trackMouseDownX = e.clientX;
         zoomStartX = e.clientX - rect.left;
@@ -791,7 +804,7 @@ if (trackElement && sliderElement) {
         zoomOverlay.style.pointerEvents = 'none';
         zoomOverlay.style.zIndex = '10';
         trackElement.appendChild(zoomOverlay);
-        
+
         e.preventDefault();
     });
 
@@ -812,7 +825,7 @@ if (trackElement && sliderElement) {
 
             const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
             const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
-            
+
             const pct = (activeSliderTimestamp - currentViewStart) / (currentViewEnd - currentViewStart);
             const clientX = rect.left + pct * rect.width;
             updateSliderTooltip(activeSliderTimestamp, clientX);
@@ -827,7 +840,7 @@ if (trackElement && sliderElement) {
 
     window.addEventListener('mousemove', (e) => {
         const rect = trackElement.getBoundingClientRect();
-        
+
         if (isDraggingZoom && zoomOverlay) {
             const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
             const left = Math.min(zoomStartX, currentX);
@@ -835,11 +848,11 @@ if (trackElement && sliderElement) {
             zoomOverlay.style.left = `${left}px`;
             zoomOverlay.style.width = `${width}px`;
         }
-        
+
         if (isDraggingSlider) {
             const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
             sliderElement.style.left = `${(currentX / rect.width) * 100}%`;
-            
+
             const localStart = new Date(`${currentTimelineDate}T00:00:00`);
             const localEnd = new Date(`${currentTimelineDate}T23:59:59.999`);
             const dayStartTs = Math.floor(localStart.getTime() / 1000);
@@ -848,24 +861,24 @@ if (trackElement && sliderElement) {
             const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
             const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
             const currentViewDur = currentViewEnd - currentViewStart;
-            
+
             const pct = currentX / rect.width;
             activeSliderTimestamp = Math.floor(currentViewStart + currentViewDur * pct);
-            
+
             updateSliderTooltip(activeSliderTimestamp, rect.left + currentX);
         }
     });
 
     window.addEventListener('mouseup', (e) => {
         const rect = trackElement.getBoundingClientRect();
-        
+
         if (isDraggingZoom) {
             isDraggingZoom = false;
-            
+
             if (zoomOverlay) {
                 const overlayWidth = parseFloat(zoomOverlay.style.width);
                 const overlayLeft = parseFloat(zoomOverlay.style.left);
-                
+
                 zoomOverlay.remove();
                 zoomOverlay = null;
 
@@ -885,10 +898,10 @@ if (trackElement && sliderElement) {
                     const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
                     const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
                     const currentViewDur = currentViewEnd - currentViewStart;
-                    
+
                     const pct = clickX / rect.width;
                     activeSliderTimestamp = Math.floor(currentViewStart + currentViewDur * pct);
-                    
+
                     updateSliderTooltip(activeSliderTimestamp, rect.left + clickX);
                 } else if (overlayWidth > 10) {
                     // Zoom logic
@@ -915,15 +928,15 @@ if (trackElement && sliderElement) {
                 }
             }
         }
-        
+
         if (isDraggingSlider) {
             isDraggingSlider = false;
             // Hide tooltip if cursor is not over the slider element
             const rectSlider = sliderElement.getBoundingClientRect();
             const isHovering = (
-                e.clientX >= rectSlider.left && 
-                e.clientX <= rectSlider.right && 
-                e.clientY >= rectSlider.top && 
+                e.clientX >= rectSlider.left &&
+                e.clientX <= rectSlider.right &&
+                e.clientY >= rectSlider.top &&
                 e.clientY <= rectSlider.bottom
             );
             if (!isHovering && sliderTooltip) {

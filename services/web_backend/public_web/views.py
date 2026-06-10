@@ -47,7 +47,8 @@ def user_detail_view(request, account_id):
         target_date = timezone.now().date()
         
     target_date_str = target_date.strftime('%Y-%m-%d')
-    today_str = timezone.now().strftime('%Y-%m-%d')
+    today_date = timezone.now().date()
+    today_str = today_date.strftime('%Y-%m-%d')
 
     day_cache_key = f"global_server_voice_safe_day_v1_{target_date_str}"
     compressed_day_data = cache.get(day_cache_key)
@@ -88,34 +89,51 @@ def user_detail_view(request, account_id):
     if request.GET.get('format') == 'json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return HttpResponse(day_history_json_string, content_type='application/json')
 
-    user_cache_key = f"user_safe_history_v1_{account_id}"
-    compressed_user_data = cache.get(user_cache_key)
+    now = timezone.now()
+    start_of_today_utc = timezone.make_aware(datetime.combine(today_date, datetime.min.time()))
+    one_year_ago_utc = now - timedelta(days=365)
 
-    if compressed_user_data is None:
-        now = timezone.now()
-        one_year_ago = now - timedelta(days=365)
-        
-        presences = DiscordUserPresence.objects.filter(
+    archive_cache_key = f"user_archive_history_v1_{account_id}"
+    compressed_archive = cache.get(archive_cache_key)
+    
+    if compressed_archive is None:
+        archive_presences = DiscordUserPresence.objects.filter(
             account=user,
-            start_time__gte=one_year_ago
+            start_time__gte=one_year_ago_utc,
+            start_time__lt=start_of_today_utc
         ).select_related('channel').order_by('start_time')
-
-        raw_intervals = []
-        for p in presences:
+        
+        archive_intervals = []
+        for p in archive_presences:
             state_int = STATE_MAP.get(p.state, 0)
-            start_ts = int(p.start_time.timestamp())
-            end_ts = int(p.end_time.timestamp())
-            ch_name = p.channel.name if p.channel else None
-            raw_intervals.append((state_int, start_ts, end_ts, ch_name))
+            archive_intervals.append((state_int, int(p.start_time.timestamp()), int(p.end_time.timestamp()), p.channel.name if p.channel else None))
+            
+        compressed_archive = zlib.compress(json.dumps(archive_intervals).encode('utf-8'))
+        cache.set(archive_cache_key, compressed_archive, timeout=86400)
+        
+    user_archive_data = json.loads(zlib.decompress(compressed_archive).decode('utf-8'))
 
-        serialized_user = json.dumps(raw_intervals).encode('utf-8')
-        compressed_user_data = zlib.compress(serialized_user)
-        cache.set(user_cache_key, compressed_user_data, timeout=86400)
-        history_source = "database"
-    else:
-        history_source = "cache"
+    today_cache_key = f"user_today_history_v1_{account_id}"
+    compressed_today = cache.get(today_cache_key)
+    
+    if compressed_today is None:
+        today_presences = DiscordUserPresence.objects.filter(
+            account=user,
+            start_time__gte=start_of_today_utc
+        ).select_related('channel').order_by('start_time')
+        
+        today_intervals = []
+        for p in today_presences:
+            state_int = STATE_MAP.get(p.state, 0)
+            today_intervals.append((state_int, int(p.start_time.timestamp()), int(p.end_time.timestamp()), p.channel.name if p.channel else None))
+            
+        compressed_today = zlib.compress(json.dumps(today_intervals).encode('utf-8'))
+        cache.set(today_cache_key, compressed_today, timeout=15)
+        
+    user_today_data = json.loads(zlib.decompress(compressed_today).decode('utf-8'))
 
-    user_history_json_string = zlib.decompress(compressed_user_data).decode('utf-8')
+    total_yearly_intervals = user_archive_data + user_today_data
+    user_history_json_string = json.dumps(total_yearly_intervals)
 
     context = {
         'user_profile': user,
@@ -123,6 +141,5 @@ def user_detail_view(request, account_id):
         'selected_date': target_date_str,
         'yearly_history_json': user_history_json_string,
         'global_voice_json': day_history_json_string,
-        'history_source': history_source,
     }
     return render(request, 'public_web/user_detail.html', context)

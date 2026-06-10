@@ -82,10 +82,8 @@ class UserPresenceTracker:
             start_time = now_utc
             
         if current_state != previous_state or current_channel_id != previous_channel_id:
-            state_to_record = previous_state if previous_state is not None else current_state
-            channel_to_record = previous_channel_id if previous_state is not None else current_channel_id
-            
-            await self.record_state_period(member, state_to_record, start_time, now_utc, channel_to_record)
+            if previous_state is not None:
+                await self.record_state_period(member, previous_state, start_time, now_utc, previous_channel_id)
             self.user_states[account_id] = {"state": current_state, "channel_id": current_channel_id, "start_time": now_utc}
 
     async def record_state_period(self, member: disnake.Member, state: str, start_time: datetime, end_time: datetime, channel_id: int | None = None) -> None:
@@ -147,12 +145,38 @@ class UserPresenceTracker:
     @tasks.loop(minutes=10)
     async def periodic_state_fixation(self) -> None:
         now_utc = datetime.now(timezone.utc)
-        for account_id, state_info in self.user_states.items():
+        account_ids = list(self.user_states.keys())
+        
+        for account_id in account_ids:
+            state_info = self.user_states.get(account_id)
+            if not state_info:
+                continue
+            
             last_time = state_info["start_time"]
-            if (now_utc - last_time) >= timedelta(minutes=10):
+            state = state_info["state"]
+            channel_id = state_info["channel_id"]
+            
+            if now_utc > last_time:
                 member = self.guild.get_member(account_id) if self.guild else None
                 if member:
-                    await self.record_state_period(member, state_info["state"], last_time, now_utc, state_info["channel_id"])
+                    await self.record_state_period(member, state, last_time, now_utc, channel_id)
+                else:
+                    if channel_id and not await self.repo.is_channel_exist(channel_id):
+                        ch_obj = self.guild.get_channel(channel_id) if self.guild else None
+                        ch_name = ch_obj.name if ch_obj else f"Unknown Channel {channel_id}"
+                        await self.repo.create_channel(channel_id, ch_name, is_active=True)
+                        
+                    if last_time.date() != now_utc.date():
+                        await self.record_period_split(account_id, state, last_time, now_utc, channel_id)
+                    else:
+                        await self.repo.save_period(account_id, state, last_time, now_utc, channel_id)
+                
+                # Check if state didn't change while we were awaiting
+                current_info = self.user_states.get(account_id)
+                if (current_info and 
+                    current_info["start_time"] == last_time and 
+                    current_info["state"] == state and 
+                    current_info["channel_id"] == channel_id):
                     self.user_states[account_id]["start_time"] = now_utc
 
     @tasks.loop(hours=24)
@@ -208,13 +232,32 @@ class UserPresenceTracker:
     async def stop(self) -> None:
         now_utc = datetime.now(timezone.utc)
         tasks_to_save = []
+        user_states_copy = list(self.user_states.items())
         
-        for account_id, state_info in self.user_states.items():
+        for account_id, state_info in user_states_copy:
             member = self.guild.get_member(account_id) if self.guild else None
-            if member:
-                tasks_to_save.append(
-                    self.record_state_period(member, state_info['state'], state_info['start_time'], now_utc, state_info['channel_id'])
-                )
+            last_time = state_info['start_time']
+            state = state_info['state']
+            channel_id = state_info['channel_id']
+            
+            if now_utc > last_time:
+                if member:
+                    tasks_to_save.append(
+                        self.record_state_period(member, state, last_time, now_utc, channel_id)
+                    )
+                else:
+                    async def save_fallback(acc_id=account_id, st=state, lt=last_time, nt=now_utc, ch_id=channel_id):
+                        if ch_id and not await self.repo.is_channel_exist(ch_id):
+                            ch_obj = self.guild.get_channel(ch_id) if self.guild else None
+                            ch_name = ch_obj.name if ch_obj else f"Unknown Channel {ch_id}"
+                            await self.repo.create_channel(ch_id, ch_name, is_active=True)
+                            
+                        if lt.date() != nt.date():
+                            await self.record_period_split(acc_id, st, lt, nt, ch_id)
+                        else:
+                            await self.repo.save_period(acc_id, st, lt, nt, ch_id)
+                    
+                    tasks_to_save.append(save_fallback())
             
         if tasks_to_save:
             await asyncio.gather(*tasks_to_save, return_exceptions=True)
