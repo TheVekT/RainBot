@@ -176,7 +176,7 @@ class RainNotifyPlayer:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
                     try:
-                        voice = await self._manager.connect(channel)
+                        voice = await self._manager.connect(channel, reconnect=False)
                         await self._play_file(voice, file_path, duration, volume)
                         if (
                             voice
@@ -193,7 +193,7 @@ class RainNotifyPlayer:
                         if len(channel.members) == 0:
                             continue
                         try:
-                            voice = await self._manager.connect(channel)
+                            voice = await self._manager.connect(channel, reconnect=False)
                             await self._play_file(
                                 voice, file_path, duration, volume,
                             )

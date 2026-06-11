@@ -34,6 +34,26 @@ SaveCallback = Callable[[int], Awaitable[dict[str, Any] | None]]
 RestoreCallback = Callable[[int, dict[str, Any]], Awaitable[None]]
 
 
+class RobustVoiceClient(disnake.VoiceClient):
+    """VoiceClient subclass that prevents crashes due to uninitialized websocket."""
+
+    async def poll_voice_ws(self, ws=None, *args, **kwargs) -> None:
+        try:
+            while True:
+                # Use self.ws if it's a valid websocket, otherwise fallback to ws
+                current_ws = self.ws if hasattr(self.ws, "poll_event") else ws
+                if hasattr(current_ws, "poll_event"):
+                    await current_ws.poll_event()
+                else:
+                    # If no valid websocket is available, exit the polling loop
+                    break
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.error("Error occurred while polling voice websocket: %s", e)
+            await self.disconnect(force=True)
+
+
 class VoiceManager:
     """Central voice-connection and priority-interrupt manager.
 
@@ -138,6 +158,7 @@ class VoiceManager:
         self,
         channel: disnake.VoiceChannel,
         max_retries: int = 3,
+        reconnect: bool = True,
     ) -> disnake.VoiceClient:
         """Connect to *channel* with full retry and cleanup logic.
 
@@ -146,7 +167,7 @@ class VoiceManager:
         Raises
         ------
         Exception
-            If all retry attempts are exhausted.
+        		If all retry attempts are exhausted.
         """
         guild = channel.guild
         lock = self._get_lock(guild.id)
@@ -176,7 +197,7 @@ class VoiceManager:
 
                 try:
                     new_vc = await channel.connect(
-                        timeout=15.0, reconnect=True,
+                        timeout=15.0, reconnect=reconnect, cls=RobustVoiceClient,
                     )
                     if await self._wait_for_voice_ready(new_vc, timeout=10.0):
                         logger.info("Connected to %s", channel.name)
