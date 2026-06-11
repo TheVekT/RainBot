@@ -102,11 +102,12 @@ function updateSliderTooltip(timestamp, clientX) {
         channelLabelEl.className = 'text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5';
         usersEl.innerHTML = '<div class="text-[11px] text-gray-500 italic mt-0.5">No co-listeners</div>';
     } else {
-        // Find channel name from rawHistory
+        // Find channel name from rawHistory using channelsMapping
         const mainUserHistoryPeriod = rawHistory.find(item => {
             return timestamp >= item[1] && timestamp <= item[2];
         });
-        const channelName = (mainUserHistoryPeriod && mainUserHistoryPeriod[3]) ? mainUserHistoryPeriod[3] : `Channel #${currentChannelId}`;
+        const channelIdStr = (mainUserHistoryPeriod && mainUserHistoryPeriod[3]) ? String(mainUserHistoryPeriod[3]) : String(currentChannelId);
+        const channelName = (typeof channelsMapping !== 'undefined' && channelsMapping[channelIdStr]) ? channelsMapping[channelIdStr] : (channelIdStr ? `Channel #${channelIdStr}` : 'N/A');
 
         channelLabelEl.innerText = `🔊 ${channelName}`;
         channelLabelEl.className = 'text-[10px] text-indigo-400 font-bold uppercase tracking-wider mt-0.5 truncate';
@@ -239,7 +240,8 @@ function renderTimeline(targetDateStr) {
         const stateStr = REVERSE_STATE_MAP[item[0]] || 'unknown';
         const startTs = item[1];
         const endTs = item[2];
-        const chName = item[3] || 'N/A';
+        const chIdStr = item[3] ? String(item[3]) : null;
+        const chName = (chIdStr && typeof channelsMapping !== 'undefined' && channelsMapping[chIdStr]) ? channelsMapping[chIdStr] : (chIdStr ? `Channel #${chIdStr}` : 'N/A');
 
         const clampedStart = Math.max(startTs, viewStartTs);
         const clampedEnd = Math.min(endTs, viewEndTs);
