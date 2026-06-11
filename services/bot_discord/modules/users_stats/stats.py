@@ -45,7 +45,6 @@ class UserPresenceTracker:
 
     def _start(self) -> None:
         asyncio.create_task(self.on_ready())
-        self.periodic_state_fixation.start()
 
     async def on_ready(self) -> None:
         await self.bot.wait_until_ready()
@@ -57,6 +56,7 @@ class UserPresenceTracker:
         
         logger.info(f"[UserStats] Tracker initialized for guild: {self.guild.name}")
         self.periodic_stats_update.start()
+        self.periodic_state_fixation.start()
         self.clean_old_stats.start()
         self.compress_stats.start()
         self.daily_profile_sync.start()
@@ -144,10 +144,11 @@ class UserPresenceTracker:
 
     @tasks.loop(minutes=10)
     async def periodic_state_fixation(self) -> None:
+        if not self.guild:
+            return
         now_utc = datetime.now(timezone.utc)
-        account_ids = list(self.user_states.keys())
         
-        for account_id in account_ids:
+        for account_id in list(self.user_states.keys()):
             state_info = self.user_states.get(account_id)
             if not state_info:
                 continue
@@ -156,32 +157,28 @@ class UserPresenceTracker:
             state = state_info["state"]
             channel_id = state_info["channel_id"]
             
-            if now_utc > last_time:
-                member = self.guild.get_member(account_id) if self.guild else None
-                if member:
-                    await self.record_state_period(member, state, last_time, now_utc, channel_id)
-                else:
-                    if channel_id and not await self.repo.is_channel_exist(channel_id):
-                        ch_obj = self.guild.get_channel(channel_id) if self.guild else None
-                        ch_name = ch_obj.name if ch_obj else f"Unknown Channel {channel_id}"
-                        await self.repo.create_channel(channel_id, ch_name, is_active=True)
-                        
-                    if last_time.date() != now_utc.date():
-                        await self.record_period_split(account_id, state, last_time, now_utc, channel_id)
-                    else:
-                        await self.repo.save_period(account_id, state, last_time, now_utc, channel_id)
+            # Update start_time BEFORE any await — prevents race condition
+            # with periodic_stats_update reading stale start_time during DB write
+            self.user_states[account_id]["start_time"] = now_utc
+            
+            member = self.guild.get_member(account_id)
+            if member:
+                await self.record_state_period(member, state, last_time, now_utc, channel_id)
+            else:
+                if channel_id and not await self.repo.is_channel_exist(channel_id):
+                    ch_obj = self.guild.get_channel(channel_id) if self.guild else None
+                    ch_name = ch_obj.name if ch_obj else f"Unknown Channel {channel_id}"
+                    await self.repo.create_channel(channel_id, ch_name, is_active=True)
                 
-                # Check if state didn't change while we were awaiting
-                current_info = self.user_states.get(account_id)
-                if (current_info and 
-                    current_info["start_time"] == last_time and 
-                    current_info["state"] == state and 
-                    current_info["channel_id"] == channel_id):
-                    self.user_states[account_id]["start_time"] = now_utc
+                if last_time.date() != now_utc.date():
+                    await self.record_period_split(account_id, state, last_time, now_utc, channel_id)
+                else:
+                    await self.repo.save_period(account_id, state, last_time, now_utc, channel_id)
 
     @tasks.loop(hours=24)
     async def daily_profile_sync(self) -> None:
         """Scheduled mass synchronization to update avatar URLs and nicknames from Discord."""
+        self.guild = self.bot.get_guild(self.guild_id)
         if not self.guild:
             return
         logger.info("[UserStats] Executing daily full profile synchronization...")
