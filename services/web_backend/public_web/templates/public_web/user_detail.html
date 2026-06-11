@@ -63,8 +63,7 @@
                 {% endif %}
                 <div class="text-center sm:text-left min-w-0">
                     <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-center sm:justify-start mb-1">
-                        <h2 class="text-2xl font-extrabold text-white tracking-wide truncate">{{ user_profile.nickname
-                            }}</h2>
+                        <h2 class="text-2xl font-extrabold text-white tracking-wide truncate">{{ user_profile.nickname }}</h2>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide w-fit self-center
                             {% if user_profile.current_status == 'offline' %} bg-gray-900/50 text-gray-400 border border-gray-700/50
                             {% elif 'voice' in user_profile.current_status %} bg-emerald-950/35 text-emerald-400 border border-emerald-900/45
@@ -267,10 +266,10 @@
 
     <!-- Initialization and Data Injection -->
     <script>
-        const archiveHistory = {{ yearly_archive_json| safe }};
-        const todayHistory = {{ user_today_json| safe }};
-        const channelsMapping = {{ channels_mapping_json| safe }};
-        let globalVoiceData = {{ global_voice_json| safe }};
+        const archiveHistory = {{ yearly_archive_json|safe }};
+        const todayHistory = {{ user_today_json|safe }};
+        const channelsMapping = {{ channels_mapping_json|safe }};
+        let globalVoiceData = {{ global_voice_json|safe }};
         const currentUserAccountId = "{{ user_profile.account_id }}";
 
         const rawHistory = archiveHistory.concat(todayHistory);
