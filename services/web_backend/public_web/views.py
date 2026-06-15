@@ -84,7 +84,7 @@ def user_detail_view(request, account_id):
         day_payload = {"intervals": day_intervals, "channels": day_channels}
         compressed_day_payload = zlib.compress(json.dumps(day_payload).encode('utf-8'))
         
-        day_cache_timeout = 15 if target_date_str == today_str else 86400
+        day_cache_timeout = 15 if target_date >= today_date else 86400
         cache.set(day_cache_key, compressed_day_payload, timeout=day_cache_timeout)
 
     day_data = json.loads(zlib.decompress(compressed_day_payload).decode('utf-8'))
