@@ -417,9 +417,30 @@ function renderHeatmap() {
         const stateStr = REVERSE_STATE_MAP[item[0]];
         if (!stateStr || stateStr === 'offline') return;
 
-        const startMs = item[1] * 1000;
-        const dateKey = getYYYYMMDD(new Date(startMs));
-        dailyCoefficient[dateKey] = (dailyCoefficient[dateKey] || 0) + (item[2] - item[1]);
+        const startTs = item[1];
+        const endTs = item[2];
+
+        const startDate = new Date(startTs * 1000);
+        let current = new Date(startDate);
+        current.setHours(0, 0, 0, 0);
+
+        while (current.getTime() / 1000 < endTs) {
+            const dayStartTs = Math.floor(current.getTime() / 1000);
+            const nextDay = new Date(current);
+            nextDay.setDate(nextDay.getDate() + 1);
+            const dayEndTs = Math.floor(nextDay.getTime() / 1000);
+
+            const clampedStart = Math.max(startTs, dayStartTs);
+            const clampedEnd = Math.min(endTs, dayEndTs);
+            const duration = clampedEnd - clampedStart;
+
+            if (duration > 0) {
+                const dateKey = getYYYYMMDD(current);
+                dailyCoefficient[dateKey] = (dailyCoefficient[dateKey] || 0) + duration;
+            }
+
+            current = nextDay;
+        }
     });
 
     const boxSize = 11;
