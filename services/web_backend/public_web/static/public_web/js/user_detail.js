@@ -442,6 +442,7 @@ function renderHeatmap() {
             current = nextDay;
         }
     });
+    console.log("[renderHeatmap] Calculated dailyCoefficient map:", dailyCoefficient);
 
     const boxSize = 11;
     const gap = 3;
