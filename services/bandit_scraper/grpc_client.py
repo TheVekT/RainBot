@@ -1,8 +1,11 @@
 import grpc
 import asyncio
+import logging
 
 import rain_service_pb2
 import rain_service_pb2_grpc
+
+logger = logging.getLogger(__name__)
 
 class OrchestratorNotifier:
     """
@@ -12,7 +15,7 @@ class OrchestratorNotifier:
         self.grpc_address = grpc_address
         self.channel = grpc.aio.insecure_channel(self.grpc_address)
         self.stub = rain_service_pb2_grpc.OrchestratorServiceStub(self.channel)
-        print(f"[gRPC] Client initialized. Orchestrator address: {self.grpc_address}")
+        logger.info("[gRPC] Client initialized. Orchestrator address: %s", self.grpc_address)
 
     async def close(self):
         """
@@ -20,7 +23,7 @@ class OrchestratorNotifier:
         """
         if self.channel:
             await self.channel.close()
-            print("[gRPC] Connection channel closed.")
+            logger.info("[gRPC] Connection channel closed.")
 
     async def _send_event(self, event_type, scrap_amount: float, user_count: int):
         """
@@ -36,18 +39,18 @@ class OrchestratorNotifier:
             response = await self.stub.SendRainUpdate(request, timeout=5.0)
             
             if not response.success:
-                print(f"[gRPC-WARN] Django returned logical error: {response.error_message}")
+                logger.warning("[gRPC-WARN] Django returned logical error: %s", response.error_message)
                 
         except grpc.RpcError as e:
-            print(f"[gRPC-ERROR] Network error when contacting Django: {e.details()} (code: {e.code()})")
+            logger.error("[gRPC-ERROR] Network error when contacting Django: %s (code: %s)", e.details(), e.code())
         except Exception as e:
-            print(f"[gRPC-ERROR] Unexpected error: {e}")
+            logger.error("[gRPC-ERROR] Unexpected error: %s", e)
 
     async def notify_start(self, scrap_amount: float, user_count: int):
         """
         Sends a rain started notification.
         """
-        print("[gRPC] Sending signal: Rain STARTED")
+        logger.info("[gRPC] Sending signal: Rain STARTED")
         await self._send_event(
             event_type=rain_service_pb2.RainEvent.STARTED, 
             scrap_amount=scrap_amount, 
@@ -68,7 +71,7 @@ class OrchestratorNotifier:
         """
         Sends a rain ended notification.
         """
-        print("[gRPC] Sending signal: Rain ENDED")
+        logger.info("[gRPC] Sending signal: Rain ENDED")
         await self._send_event(
             event_type=rain_service_pb2.RainEvent.ENDED, 
             scrap_amount=scrap_amount, 

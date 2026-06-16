@@ -37,21 +37,17 @@ RestoreCallback = Callable[[int, dict[str, Any]], Awaitable[None]]
 class RobustVoiceClient(disnake.VoiceClient):
     """VoiceClient subclass that prevents crashes due to uninitialized websocket."""
 
-    async def poll_voice_ws(self, ws=None, *args, **kwargs) -> None:
+    async def poll_voice_ws(self, reconnect: bool) -> None:
         try:
-            while True:
-                # Use self.ws if it's a valid websocket, otherwise fallback to ws
-                current_ws = self.ws if hasattr(self.ws, "poll_event") else ws
-                if hasattr(current_ws, "poll_event"):
-                    await current_ws.poll_event()
-                else:
-                    # If no valid websocket is available, exit the polling loop
-                    break
-        except asyncio.CancelledError:
-            return
-        except Exception as e:
-            logger.error("Error occurred while polling voice websocket: %s", e)
-            await self.disconnect(force=True)
+            await super().poll_voice_ws(reconnect)
+        except AttributeError as e:
+            # During disconnect/cleanup, self.ws is set to MISSING, which raises
+            # AttributeError: '_MissingSentinel' object has no attribute 'poll_event'.
+            # We catch and ignore this specific error to allow graceful exit.
+            if "poll_event" in str(e):
+                pass
+            else:
+                raise
 
 
 class VoiceManager:

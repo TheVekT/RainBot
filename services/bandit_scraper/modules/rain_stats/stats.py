@@ -1,6 +1,9 @@
 import asyncio
 import asyncpg
 from datetime import datetime, timezone, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RainStatsRecorder:
     """
@@ -17,13 +20,13 @@ class RainStatsRecorder:
         Initializes the PostgreSQL connection pool and starts the background cleanup task.
         """
         try:
-            print("[Tracker] Connecting to PostgreSQL...")
+            logger.info("[Tracker] Connecting to PostgreSQL...")
             self.pool = await asyncpg.create_pool(self.db_url)
-            print("[Tracker] Connection established.")
+            logger.info("[Tracker] Connection established.")
             
             self._cleanup_task = asyncio.create_task(self._cleanup_loop())
         except Exception as e:
-            print(f"[Tracker] CRITICAL ERROR connecting to the database: {e}")
+            logger.error("[Tracker] CRITICAL ERROR connecting to the database: %s", e)
 
     async def stop(self):
         """
@@ -33,7 +36,7 @@ class RainStatsRecorder:
             self._cleanup_task.cancel()
         if self.pool:
             await self.pool.close()
-            print("[Tracker] Connection pool closed.")
+            logger.info("[Tracker] Connection pool closed.")
 
     async def record_rain_end(self, scrap_amount: float, user_count: int):
         """
@@ -44,7 +47,7 @@ class RainStatsRecorder:
             user_count (int): Total number of participants.
         """
         if not self.pool:
-            print("[Tracker] Error: Connection pool is not initialized.")
+            logger.error("[Tracker] Error: Connection pool is not initialized.")
             return
         
         try:
@@ -58,9 +61,9 @@ class RainStatsRecorder:
                     ''',
                     scrap_amount, user_count, now_utc
                 )
-            print(f"[Tracker] Saved stats to DB: {scrap_amount} scrap, {user_count} users")
+            logger.info("[Tracker] Saved stats to DB: %s scrap, %s users", scrap_amount, user_count)
         except Exception as e:
-            print(f"[Tracker] Error saving stats to DB: {e}")
+            logger.error("[Tracker] Error saving stats to DB: %s", e)
 
     async def clean_old_stats(self):
         """
@@ -77,9 +80,9 @@ class RainStatsRecorder:
                     'DELETE FROM rain_stats WHERE end_time < $1',
                     cutoff_date
                 )
-            print(f"[Tracker] Database cleanup finished. Result: {result}")
+            logger.info("[Tracker] Database cleanup finished. Result: %s", result)
         except Exception as e:
-            print(f"[Tracker] Error cleaning up old stats: {e}")
+            logger.error("[Tracker] Error cleaning up old stats: %s", e)
 
     async def _cleanup_loop(self):
         """

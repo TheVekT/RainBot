@@ -7,6 +7,7 @@ from pathlib import Path
 import psutil
 import undetected_chromedriver as uc
 from bs4 import BeautifulSoup
+import logging
 
 from utils.signal import Signal
 from utils.str_to_float import str_to_float
@@ -16,6 +17,8 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
+logger = logging.getLogger(__name__)
 
 class RainParser:
     """
@@ -107,7 +110,7 @@ class RainParser:
             try:
                 self.driver.quit()
             except Exception as e:
-                print(f"[ERROR] Failed to quit browser session: {e}")
+                logger.error("Failed to quit browser session: %s", e)
             finally:
                 self.driver = None
 
@@ -126,11 +129,11 @@ class RainParser:
                 try:
                     if child.name() in chrome_names:
                         child.kill()
-                        print(f"[DEBUG] Killed leftover Chrome child process PID: {child.pid}")
+                        logger.debug("Killed leftover Chrome child process PID: %s", child.pid)
                 except Exception as e:
-                    print(f"[WARN] Failed to kill child process PID {child.pid}: {e}")
+                    logger.warning("Failed to kill child process PID %s: %s", child.pid, e)
         except Exception as e:
-            print(f"[ERROR] Failed to clean up process tree: {e}")
+            logger.error("Failed to clean up process tree: %s", e)
             
         await asyncio.sleep(2)
 
@@ -153,7 +156,7 @@ class RainParser:
 
         self.restarting_browser = True
                 
-        print("[INFO] Performing scheduled browser restart...")
+        logger.info("Performing scheduled browser restart...")
 
         await self.close_browsers()
         
@@ -172,19 +175,19 @@ class RainParser:
                     # Extracts major version, e.g. "120.0.6099.109" -> 120
                     major_version = int(version_env.split('.')[0])
                     chrome_kwargs["version_main"] = major_version
-                    print(f"[INFO] Using chromedriver version_main={major_version} from environment.")
+                    logger.info("Using chromedriver version_main=%s from environment.", major_version)
                 except (ValueError, IndexError):
-                    print(f"[WARN] Invalid CHROMEDRIVER_VERSION format: '{version_env}'. Using auto-detection.")
+                    logger.warning("Invalid CHROMEDRIVER_VERSION format: '%s'. Using auto-detection.", version_env)
             
             self.driver = uc.Chrome(**chrome_kwargs)
             self.driver.get(self.url)
             self.driver.implicitly_wait(5)
             
             self.last_restart_time = datetime.datetime.now()
-            print("[INFO] Browser successfully restarted.")
+            logger.info("Browser successfully restarted.")
             
         except Exception as e:
-            print(f"[ERROR] Critical error during browser launch: {e}")
+            logger.error("Critical error during browser launch: %s", e)
             
         finally:
             self.restarting_browser = False
@@ -206,7 +209,7 @@ class RainParser:
             
             return event_div.text if event_div else None
         except Exception as e:
-            print(f"[ERROR] Error reading page source: {e}")
+            logger.error("Error reading page source: %s", e)
             await self.restart_browser() # Emergency restart when access fails
             return None
 
@@ -226,7 +229,7 @@ class RainParser:
                 if match:
                     return int(match.group(1))
         except Exception as e:
-            print(f"[ERROR] Failed to parse participant user count: {e}")
+            logger.error("Failed to parse participant user count: %s", e)
         return None
 
     async def _scrap_check(self, event_data: str) -> float | int | None: 
@@ -245,14 +248,14 @@ class RainParser:
                 if match:
                     return str_to_float(match.group(1))
         except Exception as e:
-            print(f"[ERROR] Failed to parse scrap amount: {e}")
+            logger.error("Failed to parse scrap amount: %s", e)
         return None
 
     async def run(self):
         """
         Main infinite loop running the scrapper browser and emitting signals on state changes.
         """
-        print("[INFO] Parser started. Monitoring rain events...")
+        logger.info("Parser started. Monitoring rain events...")
         
         while True:
             try:
@@ -274,7 +277,7 @@ class RainParser:
                 # If a rain event container is found on the page
                 if event_data and "event" in event_data.lower():
                     self.rain_now = True
-                    print("[EVENT] Rain DETECTED!")
+                    logger.info("[EVENT] Rain DETECTED!")
                     
                     current_scrap = await self._scrap_check(event_data)
                     current_users = await self._users_check(event_data)
@@ -297,7 +300,7 @@ class RainParser:
                         
                         # If the rain container has disappeared
                         if not event_data or "event" not in event_data.lower():
-                            print(f"[EVENT] Rain ENDED. Summary: {old_scrap} scrap, {old_users} users.")
+                            logger.info("[EVENT] Rain ENDED. Summary: %s scrap, %s users.", old_scrap, old_users)
                             # EMIT: Rain ended (positional arguments)
                             self.on_rain_ended.emit(old_scrap, old_users)
                             
@@ -314,7 +317,7 @@ class RainParser:
                         
                         # EMIT: Rain updated (only if data changed, positional arguments)
                         if current_scrap > old_scrap or current_users != old_users:
-                            # print(f"[DEBUG] Update: {current_scrap} scrap, {current_users} users")
+                            # logger.debug("Update: %s scrap, %s users", current_scrap, current_users)
                             self.on_rain_updated.emit(current_scrap, current_users)
                             
                             old_scrap = current_scrap
@@ -323,5 +326,5 @@ class RainParser:
                 await asyncio.sleep(self.poll_interval)
                 
             except Exception as e:
-                print(f"[ERROR] Unhandled exception in main runner loop: {e}")
+                logger.error("Unhandled exception in main runner loop: %s", e)
                 await asyncio.sleep(5)
