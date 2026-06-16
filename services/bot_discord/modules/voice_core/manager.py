@@ -35,7 +35,18 @@ RestoreCallback = Callable[[int, dict[str, Any]], Awaitable[None]]
 
 
 class RobustVoiceClient(disnake.VoiceClient):
-    """VoiceClient subclass that prevents crashes due to uninitialized websocket."""
+    """VoiceClient subclass that prevents crashes and enforces timeouts."""
+
+    async def connect(self, *, reconnect: bool, timeout: float) -> None:
+        try:
+            await asyncio.wait_for(
+                super().connect(reconnect=reconnect, timeout=timeout),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Voice client connection timed out after %s seconds", timeout)
+            await self.disconnect(force=True)
+            raise
 
     async def poll_voice_ws(self, reconnect: bool) -> None:
         try:
