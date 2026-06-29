@@ -37,11 +37,11 @@ Exposes a real-time event stream consumed by clients to receive live updates of 
 Updates are emitted as standard SSE data chunks with double-newline terminators (`\n\n`):
 
 ```event-stream
-data: {"event": "rain_start", "scrap": 12.34, "users": 5}
+data: {"event": "rain_start", "scrap": 32.34, "users": 17}
 
-data: {"event": "rain_now", "scrap": 15.67, "users": 10}
+data: {"event": "rain_now", "scrap": 45.67, "users": 304}
 
-data: {"event": "rain_ended", "scrap": 15.67, "users": 10}
+data: {"event": "rain_ended", "scrap": 45.67, "users": 304}
 ```
 
 * `event` (string): One of: `rain_start`, `rain_now`, `rain_ended`.
