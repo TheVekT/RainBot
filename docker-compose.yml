@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  web_backend:
+  web-backend:
     build:
       context: ./services/web_backend
       dockerfile: Dockerfile
@@ -30,7 +30,7 @@ services:
       - static_data:/app/staticfiles
     command: >
       sh -c "python manage.py collectstatic --noinput &&
-             gunicorn core.wsgi:application --bind 0.0.0.0:${DJANGO_PORT:-8000} --workers 1"
+             uvicorn core.asgi:application --host 0.0.0.0 --port ${DJANGO_PORT:-8000} --workers 1"
 
   orchestrator_grpc:
     build:
@@ -118,7 +118,7 @@ services:
     env_file:
       - .env
     depends_on:
-      - web_backend
+      - web-backend
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
       - static_data:/var/www/static
