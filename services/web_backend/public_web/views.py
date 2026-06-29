@@ -5,7 +5,7 @@ from datetime import datetime
 from django.http import HttpResponse
 from django.views.decorators.cache import cache_page
 from orchestrator.models import DiscordAccount
-from .services import get_global_voice_stats, get_user_archive_stats, get_user_today_stats
+from .services import get_global_voice_stats, get_user_archive_stats, get_user_today_stats, get_all_voice_channels, get_all_discord_accounts
 
 @cache_page(60 * 5)
 def user_list_view(request):
@@ -39,7 +39,7 @@ def user_detail_view(request, account_id):
     target_date_str = target_date.strftime('%Y-%m-%d')
     
     # Fetch global daily stats (can be shared across other views)
-    global_intervals, global_channels = get_global_voice_stats(target_date, today_date)
+    global_intervals = get_global_voice_stats(target_date, today_date)
     
     # Fast route for dynamic JSON timeline polling requests
     if request.GET.get('format') == 'json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -47,8 +47,8 @@ def user_detail_view(request, account_id):
 
     # Prepare timeline frames bounds
     start_of_today = timezone.make_aware(datetime.combine(today_date, datetime.min.time()))
-    channels_dict = {}
-    channels_dict.update(global_channels)
+    all_channels = get_all_voice_channels()
+    channels_dict = {ch['channel_id']: ch['name'] for ch in all_channels}
 
     # Fetch dedicated target user payloads
     user_archive, archive_channels = get_user_archive_stats(user, account_id, today_str, start_of_today)
@@ -56,6 +56,8 @@ def user_detail_view(request, account_id):
     
     user_today, today_channels = get_user_today_stats(user, account_id, today_str, start_of_today)
     channels_dict.update(today_channels)
+
+    users_metadata = {acc['account_id']: acc for acc in get_all_discord_accounts()}
 
     context = {
         'user_profile': user,
@@ -65,5 +67,44 @@ def user_detail_view(request, account_id):
         'user_today_json': json.dumps(user_today),
         'global_voice_json': json.dumps(global_intervals),
         'channels_mapping_json': json.dumps(channels_dict),
+        'users_metadata_json': json.dumps(users_metadata),
     }
     return render(request, 'public_web/user_detail.html', context)
+
+def chronology_view(request):
+    """
+    Controller handling the server-wide voice channels timeline chart.
+    Defaults to the current calendar date.
+    """
+    date_str = request.GET.get('date')
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = timezone.now().date()
+    else:
+        target_date = timezone.now().date()
+        
+    today_date = timezone.now().date()
+    today_str = today_date.strftime('%Y-%m-%d')
+    target_date_str = target_date.strftime('%Y-%m-%d')
+
+    # Reuses the exact same cache layer as user_detail view
+    global_intervals = get_global_voice_stats(target_date, today_date)
+
+    # Fast interceptor fallback for live dynamic AJAX data refreshing
+    if request.GET.get('format') == 'json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return HttpResponse(json.dumps(global_intervals), content_type='application/json')
+
+    # Fetches full channel entities structure with a 24-hour cache lifespan
+    all_channels = get_all_voice_channels()
+    users_metadata = {acc['account_id']: acc for acc in get_all_discord_accounts()}
+
+    context = {
+        'today_date': today_str,
+        'selected_date': target_date_str,
+        'global_voice_json': json.dumps(global_intervals), # Activity matrix for all server users
+        'all_channels_json': json.dumps(all_channels),      # Complete layout of rooms to draw rows
+        'users_metadata_json': json.dumps(users_metadata),
+    }
+    return render(request, 'public_web/channels_timeline.html', context)

@@ -44,12 +44,6 @@ body {
     background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15) 0%, rgba(11, 15, 25, 0) 70%);
 }
 
-/* --- LENS GLASS OVERLAY --- */
-#heatmap-lens {
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 60%), #030712;
-}
-
 /* --- MICRO ANIMATIONS --- */
 @keyframes fadeInUp {
     from {
@@ -69,15 +63,6 @@ body {
 .delay-100 { animation-delay: 0.1s; }
 .delay-200 { animation-delay: 0.2s; }
 .delay-300 { animation-delay: 0.3s; }
-
-/* Timeline Hover Segments */
-.timeline-segment-hover {
-    transition: filter 0.15s ease, transform 0.15s ease;
-}
-.timeline-segment-hover:hover {
-    filter: brightness(1.25);
-    transform: scaleY(1.05);
-}
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {

@@ -1,0 +1,14 @@
+/* --- LENS GLASS OVERLAY --- */
+#heatmap-lens {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 60%), #030712;
+}
+
+/* Timeline Hover Segments */
+.timeline-segment-hover {
+    transition: filter 0.15s ease, transform 0.15s ease;
+}
+.timeline-segment-hover:hover {
+    filter: brightness(1.25);
+    transform: scaleY(1.05);
+}
