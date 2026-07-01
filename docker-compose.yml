@@ -1,0 +1,133 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: rainbot_postgres
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_NAME:-rainbot_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web-backend:
+    build:
+      context: ./services/web_backend
+      dockerfile: Dockerfile
+    container_name: rainbot_django_web
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - SHARED_MEDIA=/shared_media
+    depends_on:
+      - db
+    volumes:
+      - ./services/web_backend:/app
+      - ./shared_media:/shared_media
+      - static_data:/app/staticfiles
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             uvicorn core.asgi:application --host 0.0.0.0 --port ${DJANGO_PORT:-8000} --workers 1"
+
+  orchestrator_grpc:
+    build:
+      context: ./services/web_backend
+      dockerfile: Dockerfile
+    container_name: rainbot_orchestrator
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - ./services/web_backend:/app
+      - ./shared_media:/shared_media
+    command: >
+      sh -c "python manage.py run_grpc"
+
+  bandit_scraper:
+    build:
+      context: ./services/bandit_scraper
+      dockerfile: Dockerfile
+    container_name: rainbot_scraper
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - ORCHESTRATOR_GRPC_HOST=orchestrator_grpc:50051
+    depends_on:
+      - db
+      - orchestrator_grpc
+    shm_size: '2gb'
+    volumes:
+      - ./services/bandit_scraper:/app
+
+  bot_telegram:
+    build:
+      context: ./services/bot_telegram
+      dockerfile: Dockerfile
+    container_name: rainbot_telegram
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - GRPC_PORT=50052
+    depends_on:
+      - db
+      - orchestrator_grpc
+    volumes:
+      - ./services/bot_telegram:/app
+
+  bot_discord:
+    build:
+      context: ./services/bot_discord
+      dockerfile: Dockerfile
+    container_name: rainbot_discord
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - GRPC_PORT=50053
+      - SOUNDS_DIR=/shared_media/audio
+    depends_on:
+      - db
+      - orchestrator_grpc
+    volumes:
+      - ./services/bot_discord:/app
+      - ./shared_media:/shared_media
+
+  caddy:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM caddy:2-builder-alpine AS builder
+        RUN xcaddy build --with github.com/caddy-dns/duckdns
+        FROM caddy:2-alpine
+        COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+    container_name: rainbot_caddy
+    restart: always
+    ports:
+      - "${CADDY_PORT:-80}:80"
+      - "${CADDY_TLS_PORT:-443}:443"  
+    env_file:
+      - .env
+    depends_on:
+      - web-backend
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - static_data:/var/www/static
+      - ./shared_media:/shared_media
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  static_data:
+  caddy_data:
+  caddy_config:

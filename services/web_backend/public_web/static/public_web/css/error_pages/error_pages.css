@@ -1,0 +1,51 @@
+/* --- 404 ERROR PAGE CUSTOM ANIMATIONS --- */
+
+.floating-cloud {
+    animation: floatBob 4s ease-in-out infinite;
+}
+
+@keyframes floatBob {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.raindrop {
+    position: absolute;
+    width: 2px;
+    height: 15px;
+    background: linear-gradient(transparent, #6366f1);
+    opacity: 0.7;
+    animation: fallDown 1.5s linear infinite;
+}
+
+@keyframes fallDown {
+    0% {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.7;
+    }
+    100% {
+        transform: translateY(80px);
+        opacity: 0;
+    }
+}
+
+.glow-404 {
+    text-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 40px rgba(99, 102, 241, 0.2);
+    animation: textPulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes textPulse {
+    0% {
+        text-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 40px rgba(99, 102, 241, 0.2);
+    }
+    100% {
+        text-shadow: 0 0 35px rgba(99, 102, 241, 0.75), 0 0 60px rgba(99, 102, 241, 0.4);
+    }
+}

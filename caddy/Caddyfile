@@ -1,0 +1,38 @@
+{$DOMAIN:localhost} {
+    # TLS configuration via DuckDNS API bypasses inbound port 80/443 requirements
+    tls {
+        dns duckdns {$DUCKDNS_TOKEN}
+    }
+
+    # Explicitly block external traffic targeting internal API endpoints
+    respond /api/v1/internal/* "Access Denied" 403
+
+    # Handle valid streaming api entries and proxy down to web container
+    reverse_proxy /api/v1/rain/stream/* web-backend:{$DJANGO_PORT:8000}
+    reverse_proxy /public_web/* web-backend:{$DJANGO_PORT:8000}
+
+
+    # Favicon mapping
+    handle /favicon.ico {
+        rewrite * /public_web/rake.ico
+        root * /var/www/static
+        file_server
+    }
+
+    # Static files mapping
+    handle_path /static/* {
+        root * /var/www/static
+        file_server
+    }
+
+    # Media files mapping
+    handle_path /media/* {
+        root * /shared_media
+        file_server
+    }
+
+    # Reverse proxy straight to Gunicorn
+    handle {
+        reverse_proxy web-backend:{$DJANGO_PORT:8000}
+    }
+}

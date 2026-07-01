@@ -1,0 +1,284 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ user_profile.nickname }} - Detailed Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="shortcut icon" type="image/x-icon" href="{% static 'public_web/rake.ico' %}">
+    <link rel="stylesheet" href="{% static 'public_web/css/global.css' %}">
+    <link rel="stylesheet" href="{% static 'public_web/css/user_detail/user_detail.css' %}">
+</head>
+
+<body
+    class="min-h-screen text-gray-100 flex flex-col relative overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
+
+    <!-- Radial Decorative Background Glow -->
+    <div
+        class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none z-0">
+    </div>
+    <div
+        class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-emerald-600/5 blur-[120px] pointer-events-none z-0">
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-40 bg-gray-950/70 border-b border-gray-800/60 backdrop-blur-md px-4 md:px-6 py-4">
+        <div class="w-full flex justify-between items-center">
+            <a href="#" class="text-xl font-bold tracking-wide flex items-center gap-2 hover:opacity-90 transition">
+                <span class="text-2xl">🌧️</span>
+                <span class="text-gradient-indigo font-extrabold">RainBot Analytics</span>
+            </a>
+            <div class="flex items-center gap-1 bg-gray-900/35 p-1 rounded-full border border-gray-800/40">
+                <a href="#" class="text-xs font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-900/40 border border-transparent px-4 py-1.5 rounded-full transition-all">Rains History</a>
+                <a href="{% url 'public_web:chronology' %}" class="text-xs font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-900/40 border border-transparent px-4 py-1.5 rounded-full transition-all">Voice Chronology</a>
+                <a href="{% url 'public_web:user_list' %}" class="text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 px-4 py-1.5 rounded-full transition-all">Discord Users</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Dashboard Container -->
+    <main class="w-full px-4 md:px-6 py-8 flex-1 z-10">
+
+        <!-- PROFILE HEADER -->
+        <div class="fade-in-up mb-8">
+            <!-- User Info Card -->
+            <div
+                class="w-full glass-card rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6 relative overflow-hidden">
+                <div
+                    class="absolute right-0 bottom-0 opacity-5 pointer-events-none select-none font-bold text-9xl tracking-tighter text-white">
+                    STAT
+                </div>
+                {% if user_profile.avatar_url %}
+                <img src="{{ user_profile.avatar_url }}" alt="{{ user_profile.nickname }}"
+                    class="w-24 h-24 rounded-full border-2 border-gray-600/40 object-cover shadow-lg transition-transform hover:scale-105 duration-300">
+                {% else %}
+                <div
+                    class="w-24 h-24 rounded-full bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-3xl font-bold shadow-lg">
+                    {{ user_profile.nickname|slice:":1"|upper }}
+                </div>
+                {% endif %}
+                <div class="text-center sm:text-left min-w-0">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-center sm:justify-start mb-1">
+                        <h2 class="text-2xl font-extrabold text-white tracking-wide truncate">{{ user_profile.nickname }}</h2>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide w-fit self-center
+                            {% if user_profile.current_status == 'offline' %} bg-gray-900/50 text-gray-400 border border-gray-700/50
+                            {% elif 'voice' in user_profile.current_status %} bg-emerald-950/35 text-emerald-400 border border-emerald-900/45
+                            {% else %} bg-indigo-950/35 text-indigo-400 border border-indigo-900/45 {% endif %}">
+                            {% if user_profile.current_status == 'offline' %}Offline
+                            {% elif user_profile.current_status == 'online' %}Online
+                            {% elif user_profile.current_status == 'voice_online' %}Voice Online
+                            {% elif user_profile.current_status == 'voice_mute' %}Voice Muted
+                            {% elif user_profile.current_status == 'voice_deaf' %}Voice Deafened
+                            {% elif user_profile.current_status == 'voice_afk' %}Voice AFK
+                            {% elif user_profile.current_status == 'voice_alone' %}Alone in Voice
+                            {% else %}{{ user_profile.current_status }}{% endif %}
+                        </span>
+                    </div>
+                    <p class="text-indigo-400 font-semibold text-sm">@{{ user_profile.username }}</p>
+                    <div class="flex flex-wrap gap-2 mt-3 items-center justify-center sm:justify-start">
+                        <span
+                            class="text-[10px] uppercase font-bold text-gray-400 bg-gray-900/45 px-2 py-0.5 rounded border border-gray-700/50">
+                            ID: {{ user_profile.account_id }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD BODY: HEATMAP -> TIMELINE -> CHARTS -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <!-- COLUMN 1 & 2: MAIN CHARTS -->
+            <div class="lg:col-span-2 flex flex-col gap-8">
+
+                <!-- Heatmap Card (Placed First) -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col fade-in-up delay-100">
+                    <div
+                        class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-gray-800/60 pb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white tracking-wide">Yearly Activity Heatmap</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Scale represents active presence time mapped to user
+                                calendar frames.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <!-- Active Calendar Focus Widget -->
+                            <div
+                                class="flex items-center gap-2.5 bg-gray-900/60 border border-gray-800/80 rounded-xl px-4 py-2 shadow-inner">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Active
+                                    Calendar Focus:</span>
+                                <div id="selected-date-display"
+                                    class="text-sm font-extrabold text-indigo-400 tracking-wide cursor-pointer hover:text-indigo-350 transition-colors flex items-center gap-1.5"
+                                    title="Click to change date">
+                                    Loading... 📅
+                                </div>
+                                <input type="date" id="timeline-date-picker" value="{{ today_date }}"
+                                    class="absolute opacity-0 pointer-events-none w-0 h-0">
+                            </div>
+                            <span
+                                class="hidden xl:inline-block text-[10px] text-gray-400 font-bold uppercase tracking-wider bg-gray-900/50 px-2 py-1.5 rounded border border-gray-700/50">
+                                Interactive Glass Grid
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex items-center justify-center py-2">
+                        <div id="heatmap-container" class="w-full flex justify-center"></div>
+                    </div>
+                </div>
+
+                <!-- Timeline Card (Placed Second) -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col fade-in-up delay-200">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-800/60 pb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white tracking-wide">Daily Presence Timeline</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Hourly activity distribution logs for the active
+                                target day.</p>
+                        </div>
+                        <span id="active-date-label"
+                            class="text-xs font-bold text-indigo-400 bg-indigo-950/45 px-3 py-1 rounded-full border border-indigo-900/60 shadow-sm">
+                            June 10, 2026
+                        </span>
+                    </div>
+
+                    <div class="relative w-full select-none mt-2">
+                        <div id="timeline-track"
+                            class="relative w-full h-12 bg-gray-950/80 rounded-xl overflow-hidden border border-gray-800/80 flex shadow-inner">
+                        </div>
+
+                        <!-- Timeline Slider -->
+                        <div id="timeline-slider"
+                            class="absolute top-0 h-12 w-0.5 bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)] cursor-ew-resize hidden z-30 select-none">
+                            <!-- Drag Handle -->
+                            <div
+                                class="absolute -top-1 -left-[5px] w-3 h-3 bg-white border-2 border-indigo-500 rounded-full shadow-[0_0_4px_rgba(99,102,241,0.5)]">
+                            </div>
+                        </div>
+
+                        <!-- Slider Tooltip -->
+                        <div id="slider-tooltip"
+                            class="absolute bottom-[80px] w-52 bg-gray-950/95 border border-gray-800 text-xs rounded-xl p-3 shadow-2xl pointer-events-none text-gray-200 font-medium backdrop-blur-md hidden z-40 transition-all duration-75">
+                            <div id="slider-tooltip-arrow"
+                                class="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-gray-950 border-r border-b border-gray-800 rotate-45">
+                            </div>
+                            <div class="flex flex-col gap-1.5" id="slider-tooltip-content">
+                                <div class="font-bold text-indigo-400 text-center border-b border-gray-800/60 pb-1"
+                                    id="slider-tooltip-time">12:34:56</div>
+                                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5"
+                                    id="slider-tooltip-channel-label">N/A</div>
+                                <div class="flex flex-col gap-1 mt-1" id="slider-tooltip-users">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="timeline-labels"
+                            class="relative w-full flex justify-between px-1 mt-2.5 text-[10px] text-gray-500 font-bold tracking-wider">
+                            <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Status Legend -->
+                    <div
+                        class="mt-6 pt-4 border-t border-gray-850 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4 text-[11px] font-semibold text-gray-400">
+                        <div class="flex flex-wrap gap-4">
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#22c55e]"></span> <span>Online</span></div>
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#06b6d4]"></span> <span>Voice Active</span>
+                            </div>
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#84cc16]"></span> <span>Voice Muted</span></div>
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></span> <span>Voice Deafened</span>
+                            </div>
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#ec4899]"></span> <span>Voice AFK</span></div>
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#8b5cf6]"></span> <span>Alone in Voice</span>
+                            </div>
+                            <div class="flex items-center gap-2"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#4b5563]"></span> <span>Offline</span></div>
+                        </div>
+                        <span class="text-gray-500 italic text-[10px] font-medium sm:text-right">
+                            Note: All stats & timeline logs adapt to your local timezone.
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- COLUMN 3: SIDEBAR RADAR CHART -->
+            <div class="flex flex-col gap-8 fade-in-up delay-300">
+
+                <!-- Quick Stats Widget -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col relative overflow-hidden">
+                    <h3 class="text-base font-bold text-white mb-4 border-b border-gray-800/60 pb-3 tracking-wide">Day
+                        Summary</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div
+                            class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3.5 flex flex-col justify-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total
+                                Active</span>
+                            <span id="qs-online-duration"
+                                class="text-base font-extrabold text-gradient-green mt-1">0m</span>
+                        </div>
+                        <div
+                            class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3.5 flex flex-col justify-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Voice
+                                Time</span>
+                            <span id="qs-voice-duration" class="text-base font-extrabold text-indigo-400 mt-1">0m</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Radar Profile Card -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col items-center">
+                    <h3 class="text-base font-bold text-white mb-1 self-start tracking-wide">Activity Radar Profile</h3>
+                    <p class="text-xs text-gray-400 mb-6 self-start">Active session types proportional distribution
+                        (offline omitted).</p>
+                    <div class="w-full h-64 flex items-center justify-center">
+                        <canvas id="radar-chart-canvas"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Floating UI Tooltips and Lenses -->
+    <div id="timeline-tooltip"
+        class="fixed hidden z-50 bg-gray-950/95 border border-gray-800 text-xs rounded-xl px-4 py-2.5 shadow-2xl pointer-events-none text-gray-200 font-medium backdrop-blur-sm">
+    </div>
+
+    <div id="heatmap-lens"
+        class="fixed pointer-events-none w-44 h-44 rounded-full overflow-hidden hidden z-50 flex items-center justify-center">
+        <!-- Glossy Sheen Overlay -->
+        <div
+            class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none rounded-full z-10">
+        </div>
+        <!-- Lens Content Container (for absolute children) -->
+        <div id="lens-grid" class="relative w-full h-full pointer-events-none">
+        </div>
+    </div>
+
+    <!-- Initialization and Data Injection -->
+    <script>
+        const archiveHistory = {{ yearly_archive_json|safe }};
+        const todayHistory = {{ user_today_json|safe }};
+        const channelsMapping = {{ channels_mapping_json|safe }};
+        let globalVoiceData = {{ global_voice_json|safe }};
+        const currentUserAccountId = "{{ user_profile.account_id }}";
+        const usersMetadata = {{ users_metadata_json|safe }};
+        const selectedDateVal = "{{ selected_date }}";
+
+        const rawHistory = archiveHistory.concat(todayHistory);
+    </script>
+    <script src="{% static 'public_web/js/utils.js' %}?v=1"></script>
+    <script src="{% static 'public_web/js/user_detail/heatmap.js' %}?v=1"></script>
+    <script src="{% static 'public_web/js/user_detail/timeline.js' %}?v=1"></script>
+    <script src="{% static 'public_web/js/user_detail/user_detail.js' %}?v=8"></script>
+</body>
+
+</html>

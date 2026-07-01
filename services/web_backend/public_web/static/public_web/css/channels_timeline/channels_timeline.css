@@ -1,0 +1,15 @@
+.custom-calendar-day {
+    transition: all 0.15s ease-in-out;
+}
+.custom-calendar-day:hover:not(.empty-day):not(.selected-day) {
+    background-color: rgba(99, 102, 241, 0.25);
+    color: #a5b4fc;
+}
+.channel-path {
+    transition: stroke-width 0.2s ease, opacity 0.2s ease, stroke 0.2s ease;
+}
+.channel-card-highlight {
+    border-color: var(--highlight-color) !important;
+    box-shadow: 0 0 12px var(--shadow-color) !important;
+    background: rgba(31, 41, 55, 0.7) !important;
+}
