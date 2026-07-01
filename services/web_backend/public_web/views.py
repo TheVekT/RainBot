@@ -108,3 +108,9 @@ def chronology_view(request):
         'users_metadata_json': json.dumps(users_metadata),
     }
     return render(request, 'public_web/channels_timeline.html', context)
+
+def custom_404_view(request, exception=None):
+    """
+    Custom 404 handler view rendering a premium error page.
+    """
+    return render(request, 'public_web/404.html', status=404)

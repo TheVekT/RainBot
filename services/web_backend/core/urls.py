@@ -22,3 +22,5 @@ urlpatterns = [
     path('api/v1/', include('api.urls')),
     path('', include('public_web.urls')),
 ]
+
+handler404 = 'public_web.views.custom_404_view'
