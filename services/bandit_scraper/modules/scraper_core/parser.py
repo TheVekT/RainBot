@@ -20,6 +20,12 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+def _is_too_many_open_files(e: Exception) -> bool:
+    """
+    Checks if an exception is caused by file descriptor resource exhaustion ([Errno 24] Too many open files).
+    """
+    return getattr(e, 'errno', None) == 24 or 'too many open files' in str(e).lower()
+
 class RainParser:
     """
     A selenium-based parser for detecting and tracking rain events on bandit.camp.
@@ -116,22 +122,24 @@ class RainParser:
 
     async def close_browsers(self):
         """
-        Kills any leftover Chrome/Chromium child processes spawned by this runner session.
+        Kills any leftover Chrome/Chromium/Chromedriver processes in the system/container.
         """
-        chrome_names = {'chrome', 'chromium', 'chromium-browser', 'google-chrome'}
+        chrome_names = {'chrome', 'chromium', 'chromium-browser', 'google-chrome', 'chromedriver', 'undetected_chromedriver'}
         try:
             await self.driver_quit()
             
-            current_process = psutil.Process(os.getpid())
-            children = current_process.children(recursive=True)
-            
-            for child in children:
+            for proc in psutil.process_iter(['pid', 'name']):
                 try:
-                    if child.name() in chrome_names:
-                        child.kill()
-                        logger.debug("Killed leftover Chrome child process PID: %s", child.pid)
+                    p_name = proc.info.get('name') or proc.name()
+                    if p_name:
+                        base_name = p_name.lower().replace('.exe', '')
+                        if base_name in chrome_names:
+                            proc.kill()
+                            logger.debug("Killed leftover browser/driver process PID: %s (%s)", proc.pid, p_name)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
                 except Exception as e:
-                    logger.warning("Failed to kill child process PID %s: %s", child.pid, e)
+                    logger.warning("Failed to kill process PID %s: %s", getattr(proc, 'pid', 'unknown'), e)
         except Exception as e:
             logger.error("Failed to clean up process tree: %s", e)
             
@@ -187,6 +195,9 @@ class RainParser:
             logger.info("Browser successfully restarted.")
             
         except Exception as e:
+            if _is_too_many_open_files(e):
+                logger.critical("Fatal resource exhaustion: [Errno 24] Too many open files. Crashing service for clean container restart.")
+                raise e
             logger.error("Critical error during browser launch: %s", e)
             
         finally:
@@ -209,6 +220,8 @@ class RainParser:
             
             return event_div.text if event_div else None
         except Exception as e:
+            if _is_too_many_open_files(e):
+                raise e
             logger.error("Error reading page source: %s", e)
             await self.restart_browser() # Emergency restart when access fails
             return None
@@ -326,5 +339,8 @@ class RainParser:
                 await asyncio.sleep(self.poll_interval)
                 
             except Exception as e:
+                if _is_too_many_open_files(e):
+                    logger.critical("Fatal resource exhaustion in main runner loop: [Errno 24] Too many open files. Crashing service for container restart.")
+                    raise e
                 logger.error("Unhandled exception in main runner loop: %s", e)
                 await asyncio.sleep(5)
