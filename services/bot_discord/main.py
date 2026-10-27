@@ -16,6 +16,7 @@ import asyncpg
 
 from bot import RainDiscordBot
 from config import DiscordConfigManager
+from cog_config_provider import CogConfigProvider
 from grpc_server import DiscordServicer, start_grpc_server
 from modules.rain_notify.player import RainNotifyPlayer
 from modules.rain_notify.router import RainEventRouter
@@ -26,6 +27,8 @@ from modules.users_stats.stats import UserPresenceTracker
 from modules.youtube_player import YouTubePlayer
 from cogs.music_cog import MusicCog
 from cogs.stats_cog import StatsCog
+from cogs.get_role_cog import GetRoleCog
+from cogs.wake_cog import WakeCog
 from rain_notify_config_provider import DatabaseConfigProvider
 
 # Configure logging
@@ -75,7 +78,7 @@ async def main() -> None:
         logger.info("Connecting to PostgreSQL...")
         db_pool = await asyncpg.create_pool(db_url)
 
-        # 3. Fetch configuration from the database
+        # 3. Fetch configurations from the database
         logger.info("Fetching server configuration from database...")
         config_manager = DiscordConfigManager(db_pool)
         await config_manager.load()
@@ -89,9 +92,17 @@ async def main() -> None:
             sys.exit(1)
 
         logger.info("Configuration loaded for guild %s.", config_manager.guild_id)
+        
+        cog_config_provider = CogConfigProvider(db_pool, config_manager.guild_id)
 
         # 4. Initialize the Discord Bot instance
         bot = RainDiscordBot(bot_token)
+        
+        get_role_cog = GetRoleCog(bot, cog_config_provider)
+        bot.add_cog(get_role_cog)
+        
+        wake_cog = WakeCog(bot, cog_config_provider)
+        bot.add_cog(wake_cog)
         
         # 5. Initialize user statistics tracking
         logger.info("Initializing user presence tracker...")
