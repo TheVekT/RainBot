@@ -64,7 +64,7 @@ class OrchestratorServicer(rain_service_pb2_grpc.OrchestratorServiceServicer):
                         "Authorization": f"Bearer {self.django_secret_key}",
                         "Content-Type": "application/json"
                     }
-                    logger.info(f"[Orchestrator] Sending POST to {self.internal_api_url} with headers: {headers}")
+                    logger.info(f"[Orchestrator] Sending POST to {self.internal_api_url}")
                     payload = {
                         "event": event_name,
                         "scrap": float(scrap),

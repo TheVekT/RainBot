@@ -85,9 +85,8 @@ class DiscordBotConfig(models.Model):
     rain_channel_id = models.BigIntegerField(null=True, blank=True, help_text="Channel ID for rain notifications")
     voice_notify_enabled = models.BooleanField(default=True, help_text="Whether voice notifications are enabled")
     text_notify_enabled = models.BooleanField(default=True, help_text="Whether text notifications are enabled")
-    
-    get_role_message_id = models.BigIntegerField(null=True, blank=True, help_text="Message ID for 'Get Role' button")
-    get_role_role_id = models.BigIntegerField(null=True, blank=True, help_text="Role ID granted by the button")
+
+    params = models.JSONField(default=dict, blank=True, help_text="Additional guild-specific bot and cog settings")
 
     class Meta:
         db_table = 'discord_bot_config'

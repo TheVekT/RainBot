@@ -37,11 +37,10 @@ class DiscordBotConfigAdmin(admin.ModelAdmin):
     list_display = (
         'guild_id', 
         'user_stats_retention_days', 
-        'get_role_message_id', 
-        'get_role_role_id',     
         'rain_channel_id', 
         'voice_notify_enabled', 
-        'text_notify_enabled'
+        'text_notify_enabled',
+        "params",
         )
     search_fields = ('guild_id',)
     
