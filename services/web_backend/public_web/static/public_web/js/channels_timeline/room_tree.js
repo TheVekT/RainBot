@@ -17,14 +17,14 @@ function renderChannelTree(targetTs) {
 
     // SVGs
     const MIC_MUTE_SVG = `
-    <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
+    <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
         <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" stroke="#ef4444" stroke-width="2.5" />
     </svg>
     `;
 
     const DEAF_SVG = `
-    <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
+    <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.5a6.5 6.5 0 01-6.5-6.5V11a6.5 6.5 0 1113 0v1a6.5 6.5 0 01-6.5 6.5z" />
         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h1.5a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5H4.5A1.5 1.5 0 013 16.5v-3A1.5 1.5 0 014.5 12zM18 12h1.5a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5H18a1.5 1.5 0 01-1.5-1.5v-3A1.5 1.5 0 0118 12z" />
         <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" stroke="#ef4444" stroke-width="2.5" />
@@ -45,12 +45,11 @@ function renderChannelTree(targetTs) {
             totalActiveRooms++;
             
             // Expand styles: explicit height, padding, margin, opacity
-            const calculatedWrapperHeight = 46 + (listeners.length > 0 ? 10 + 28 * listeners.length : 0);
-            roomWrapper.style.maxHeight = `${calculatedWrapperHeight}px`;
+            roomWrapper.style.maxHeight = 'none';
             roomWrapper.style.padding = '12px';
             roomWrapper.style.marginBottom = '8px'; // Reduced gap between channels
             roomWrapper.style.opacity = '1';
-            roomWrapper.style.borderColor = 'rgba(31, 41, 55, 0.4)'; // border-gray-800/40
+            roomWrapper.style.borderColor = 'var(--rule)'; // border-gray-800/40
 
             if (highlightedChannelId !== null && highlightedChannelId !== chId) {
                 roomWrapper.style.opacity = '0.4';
@@ -94,14 +93,14 @@ function renderChannelTree(targetTs) {
                         const nickname = userMeta.nickname || 'Unknown User';
 
                         const userRow = document.createElement('div');
-                        userRow.className = "flex items-center justify-between text-[11px] py-1 text-gray-300 hover:text-white transition-colors user-row-fade";
+                        userRow.className = "flex items-center justify-between text-xs py-1 text-gray-300 hover:text-white transition-colors user-row-fade";
                         
                         const profileBlock = document.createElement('a');
                         profileBlock.href = `/users/${userId}/`;
-                        profileBlock.className = "flex items-center gap-2 min-w-0 hover:text-indigo-400 transition-colors cursor-pointer";
+                        profileBlock.className = "flex items-center gap-2 min-w-0 hover:text-brand-400 transition-colors cursor-pointer";
 
                         const avatarCircle = document.createElement('div');
-                        avatarCircle.className = "w-4.5 h-4.5 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-[9px] font-extrabold text-indigo-400 select-none uppercase shrink-0";
+                        avatarCircle.className = "w-4.5 h-4.5 rounded-full bg-brand-600/20 border border-brand-500/30 flex items-center justify-center text-[9px] font-extrabold text-brand-400 select-none uppercase shrink-0";
                         if (userMeta.avatar_url) {
                             const img = document.createElement('img');
                             img.src = userMeta.avatar_url;
@@ -137,8 +136,7 @@ function renderChannelTree(targetTs) {
 
                     // Expand users container
                     usersContainer.style.marginTop = '8px';
-                    const calculatedMaxHeight = 28 * listeners.length + 10;
-                    usersContainer.style.maxHeight = `${calculatedMaxHeight}px`;
+                    usersContainer.style.maxHeight = 'none';
                     usersContainer.style.opacity = '1';
                 }
             }
@@ -167,7 +165,6 @@ function renderChannelTree(targetTs) {
             ph.id = 'no-rooms-placeholder';
             ph.className = 'h-64 flex flex-col items-center justify-center text-center p-4 user-row-fade';
             ph.innerHTML = `
-                <span class="text-3xl">🔇</span>
                 <div class="text-sm font-semibold text-gray-400 mt-3">No Voice Channels Recorded</div>
                 <div class="text-xs text-gray-500 mt-1">Both active rooms list and activity database ranges are empty.</div>
             `;
@@ -188,7 +185,7 @@ function initializeDOMRooms() {
         const chId = ch.channel_id;
         
         const roomWrapper = document.createElement('div');
-        roomWrapper.className = "room-card-wrapper border rounded-xl bg-gray-900/35 transition-all duration-300 ease-in-out overflow-hidden select-none";
+        roomWrapper.className = "room-card-wrapper overflow-hidden select-none";
         roomWrapper.setAttribute('data-channel-id', chId);
         
         roomWrapper.style.maxHeight = '0px';
@@ -206,13 +203,13 @@ function initializeDOMRooms() {
         const titleBlock = document.createElement('div');
         titleBlock.className = "flex items-center gap-2 min-w-0";
         titleBlock.innerHTML = `
-            <span class="text-sm">🔊</span>
-            <span class="text-xs font-bold text-gray-200 truncate pr-1">${ch.name}</span>
+            ${VOICE_ICON}
+            <span class="text-xs font-semibold text-gray-200 truncate pr-1">${ch.name}</span>
             ${!ch.is_active ? '<span class="text-[9px] bg-red-950/40 border border-red-900/40 text-red-400 font-extrabold px-1 rounded-sm uppercase tracking-wider">Deleted</span>' : ''}
         `;
 
         const badgeCount = document.createElement('span');
-        badgeCount.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-950/60 border border-gray-850 text-indigo-400 font-mono";
+        badgeCount.className = "text-[10px] font-medium px-2 py-0.5 text-gray-400 tabular";
         badgeCount.innerText = '0';
 
         roomHeader.appendChild(titleBlock);

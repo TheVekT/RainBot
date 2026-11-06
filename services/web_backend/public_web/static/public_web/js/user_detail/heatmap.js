@@ -37,11 +37,16 @@ function renderHeatmap() {
         }
     });
 
+    const availableWidth = container.clientWidth || 320;
+    // Keep cells usable instead of shrinking an entire year onto a phone.
+    const weeks = availableWidth < 480 ? 13 : availableWidth < 740 ? 26 : 53;
+    const period = document.getElementById('heatmap-period');
+    if (period) period.textContent = weeks === 13 ? 'Last 3 months' : weeks === 26 ? 'Last 6 months' : 'Last 12 months';
     const boxSize = 11;
     const gap = 3;
     const offsetX = 30; // Left offset for day labels
     const offsetY = 20; // Top offset for month labels
-    const gridWidth = 53 * (boxSize + gap);
+    const gridWidth = weeks * (boxSize + gap);
     const gridHeight = 7 * (boxSize + gap);
     const width = offsetX + gridWidth;
     const height = offsetY + gridHeight + 25; // Bottom offset for legend
@@ -53,16 +58,16 @@ function renderHeatmap() {
     endDate.setDate(endDate.getDate() + (6 - endDate.getDay())); // Align to nearest Saturday
 
     const startDate = new Date(endDate);
-    startDate.setDate(endDate.getDate() - (53 * 7 - 1)); // Sunday 53 weeks ago
+    startDate.setDate(endDate.getDate() - (weeks * 7 - 1)); // Sunday 53 weeks ago
 
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     let lastMonthLabelWeek = -1;
     let monthLabelsHtml = '';
 
     let dayLabelsHtml = `
-        <text x="25" y="${offsetY + 1 * 14 + 9}" font-size="9" fill="#9ca3af" font-family="Outfit" font-weight="500" text-anchor="end">Mon</text>
-        <text x="25" y="${offsetY + 3 * 14 + 9}" font-size="9" fill="#9ca3af" font-family="Outfit" font-weight="500" text-anchor="end">Wed</text>
-        <text x="25" y="${offsetY + 5 * 14 + 9}" font-size="9" fill="#9ca3af" font-family="Outfit" font-weight="500" text-anchor="end">Fri</text>
+        <text x="25" y="${offsetY + 1 * 14 + 9}" font-size="9" fill="#aaa9a2" font-family="Manrope" font-weight="500" text-anchor="end">Mon</text>
+        <text x="25" y="${offsetY + 3 * 14 + 9}" font-size="9" fill="#aaa9a2" font-family="Manrope" font-weight="500" text-anchor="end">Wed</text>
+        <text x="25" y="${offsetY + 5 * 14 + 9}" font-size="9" fill="#aaa9a2" font-family="Manrope" font-weight="500" text-anchor="end">Fri</text>
     `;
 
     let rectsHtml = '';
@@ -74,7 +79,7 @@ function renderHeatmap() {
     const selectedDateVal = datePickerEl ? datePickerEl.value : '';
 
     const currentCellDate = new Date(startDate);
-    for (let w = 0; w < 53; w++) {
+    for (let w = 0; w < weeks; w++) {
         const weekDate = new Date(startDate);
         weekDate.setDate(startDate.getDate() + w * 7);
         const monthIdx = weekDate.getMonth();
@@ -82,7 +87,7 @@ function renderHeatmap() {
         if (w === 0 || (monthIdx !== new Date(startDate.getTime() + (w - 1) * 7 * 24 * 60 * 60 * 1000).getMonth() && w - lastMonthLabelWeek >= 3)) {
             const monthName = MONTHS[monthIdx];
             const labelX = offsetX + w * (boxSize + gap);
-            monthLabelsHtml += `<text x="${labelX}" y="12" font-size="9" fill="#9ca3af" font-family="Outfit" font-weight="500">${monthName}</text>`;
+            monthLabelsHtml += `<text x="${labelX}" y="12" font-size="9" fill="#aaa9a2" font-family="Manrope" font-weight="500">${monthName}</text>`;
             lastMonthLabelWeek = w;
         }
 
@@ -97,23 +102,23 @@ function renderHeatmap() {
             const activeSeconds = dailyCoefficient[dateKey] || 0;
             const coefficient = Math.min(activeSeconds / 86400, 1.0);
 
-            let fillStyle = '#1f2937';
+            let fillStyle = '#262622';
             if (coefficient > 0) {
-                fillStyle = `rgba(34, 197, 94, ${0.15 + coefficient * 0.85})`;
+                fillStyle = `rgba(208, 172, 100, ${0.15 + coefficient * 0.85})`;
             }
 
             const x = offsetX + w * (boxSize + gap);
             const y = offsetY + d * (boxSize + gap);
 
             const isSelected = dateKey === selectedDateVal;
-            const strokeColor = isSelected ? '#818cf8' : 'rgba(0,0,0,0.1)';
+            const strokeColor = isSelected ? '#f4e9d5' : 'rgba(0,0,0,0.1)';
             const strokeWidth = isSelected ? '2' : '1';
 
             rectsHtml += `
                 <rect 
                     x="${x}" y="${y}" width="${boxSize}" height="${boxSize}" rx="2" 
                     fill="${fillStyle}" stroke="${strokeColor}" stroke-width="${strokeWidth}"
-                    class="transition-all duration-150 hover:stroke-indigo-400 cursor-pointer"
+                    class="transition-all duration-150 hover:stroke-brand-400 cursor-pointer"
                     data-date="${dateKey}" data-hours="${(activeSeconds / 3600).toFixed(1)}"
                     data-w="${w}" data-d="${d}"
                 />`;
@@ -125,14 +130,14 @@ function renderHeatmap() {
     // Bottom Legend
     const legendStartX = width - 150;
     let legendHtml = `
-        <text x="${legendStartX}" y="${offsetY + gridHeight + 18}" font-size="9" fill="#9ca3af" font-family="Outfit">Less</text>
+        <text x="${legendStartX}" y="${offsetY + gridHeight + 18}" font-size="9" fill="#aaa9a2" font-family="Manrope">Less</text>
     `;
     const legendColors = [
-        '#1f2937',
-        'rgba(34, 197, 94, 0.25)',
-        'rgba(34, 197, 94, 0.5)',
-        'rgba(34, 197, 94, 0.75)',
-        'rgba(34, 197, 94, 1.0)'
+        '#262622',
+        'rgba(208, 172, 100, 0.25)',
+        'rgba(208, 172, 100, 0.5)',
+        'rgba(208, 172, 100, 0.75)',
+        'rgba(208, 172, 100, 1.0)'
     ];
     legendColors.forEach((color, idx) => {
         const lx = legendStartX + 30 + idx * 14;
@@ -141,7 +146,7 @@ function renderHeatmap() {
     });
     const moreStartX = legendStartX + 30 + 5 * 14 + 5;
     legendHtml += `
-        <text x="${moreStartX}" y="${offsetY + gridHeight + 18}" font-size="9" fill="#9ca3af" font-family="Outfit">More</text>
+        <text x="${moreStartX}" y="${offsetY + gridHeight + 18}" font-size="9" fill="#aaa9a2" font-family="Manrope">More</text>
     `;
 
     svgHtml += monthLabelsHtml + dayLabelsHtml + rectsHtml + legendHtml + '</svg>';
@@ -164,7 +169,7 @@ function renderHeatmap() {
         const svgY = (mouseY / svgRect.height) * height;
 
         const gridLeft = offsetX - 7;
-        const gridRight = offsetX + 53 * 14 - 7;
+        const gridRight = offsetX + weeks * 14 - 7;
         const gridTop = offsetY - 7;
         const gridBottom = offsetY + 7 * 14 - 7;
 
@@ -180,7 +185,7 @@ function renderHeatmap() {
         } else {
             const w = Math.round((svgX - offsetX) / 14);
             const d = Math.round((svgY - offsetY) / 14);
-            colCenter = Math.max(0, Math.min(52, w));
+            colCenter = Math.max(0, Math.min(weeks - 1, w));
             rowCenter = Math.max(0, Math.min(6, d));
         }
 
@@ -214,7 +219,7 @@ function renderHeatmap() {
             for (let dd = -searchRadiusD; dd <= searchRadiusD; dd++) {
                 const col = colCenter + dw;
                 const row = rowCenter + dd;
-                if (col < 0 || col >= 53 || row < 0 || row >= 7) continue;
+                if (col < 0 || col >= weeks || row < 0 || row >= 7) continue;
 
                 const cellRect = svgElement.querySelector(`rect[data-w="${col}"][data-d="${row}"]`);
                 if (!cellRect) continue;
@@ -246,7 +251,7 @@ function renderHeatmap() {
                 const top = 88 + lens_dy - size / 2;
 
                 const strokeColorVal = cellRect.getAttribute('stroke');
-                const isSelected = strokeColorVal === '#818cf8' || cellRect.getAttribute('stroke-width') === '2';
+                const isSelected = strokeColorVal === '#f4e9d5' || cellRect.getAttribute('stroke-width') === '2';
 
                 const monthsEn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
                 const cellText = `${cellDateObj.getDate()} ${monthsEn[cellDateObj.getMonth()]}`;
@@ -269,10 +274,10 @@ function renderHeatmap() {
                 const isHovered = hoveredRect && col === colCenter && row === rowCenter;
 
                 if (isHovered) {
-                    cellDiv.style.border = isSelected ? '2px solid #818cf8' : '1.5px solid rgba(255, 255, 255, 0.85)';
+                    cellDiv.style.border = isSelected ? '2px solid #d0ac64' : '1.5px solid rgba(255, 255, 255, 0.85)';
                     cellDiv.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.25), inset 0 0 4px rgba(255,255,255,0.2)';
                 } else if (isSelected) {
-                    cellDiv.style.border = '2px solid #818cf8';
+                    cellDiv.style.border = '2px solid #d0ac64';
                     cellDiv.style.boxShadow = 'inset 0 0 4px rgba(255,255,255,0.2)';
                 } else {
                     cellDiv.style.border = '1px solid rgba(255, 255, 255, 0.15)';
@@ -293,7 +298,7 @@ function renderHeatmap() {
     }
 
     svgElement.addEventListener('mousemove', (e) => {
-        updateLens(e.clientX, e.clientY, e.target);
+        if (window.matchMedia('(hover: hover)').matches) updateLens(e.clientX, e.clientY, e.target);
     });
 
     svgElement.addEventListener('mouseleave', () => {
@@ -316,10 +321,11 @@ function renderHeatmap() {
                     r.setAttribute('stroke-width', '1');
                 }
             });
-            rect.setAttribute('stroke', '#818cf8');
+            rect.setAttribute('stroke', '#f4e9d5');
             rect.setAttribute('stroke-width', '2');
 
-            updateLens(e.clientX, e.clientY, rect);
+            // The change handler redraws the heatmap; do not reuse detached cells.
+            lens.classList.add('hidden');
         }
     });
 }

@@ -78,10 +78,10 @@ function calculateAndRenderRadar(targetDateStr) {
                 data: dataValues,
                 fill: 'start',
                 spanGaps: true,
-                backgroundColor: 'rgba(99, 102, 241, 0.22)',
-                borderColor: 'rgba(99, 102, 241, 0.85)',
+                backgroundColor: 'rgba(208, 172, 100, 0.16)',
+                borderColor: '#d0ac64',
                 borderWidth: 1.5,
-                pointBackgroundColor: 'rgba(129, 140, 248, 1)',
+                pointBackgroundColor: '#ddbf7f',
                 pointBorderColor: '#fff',
                 pointRadius: dataValues.map(v => v > 0 ? 3 : 0),
                 pointHoverRadius: dataValues.map(v => v > 0 ? 4 : 0)
@@ -94,9 +94,9 @@ function calculateAndRenderRadar(targetDateStr) {
                 r: {
                     min: minVal,
                     suggestedMax: 600,
-                    grid: { color: 'rgba(75, 85, 99, 0.25)' },
-                    angleLines: { color: 'rgba(75, 85, 99, 0.25)' },
-                    pointLabels: { color: '#9ca3af', font: { family: 'Outfit', size: 9, weight: 'bold' } },
+                    grid: { color: 'rgba(170, 169, 162, 0.16)' },
+                    angleLines: { color: 'rgba(170, 169, 162, 0.16)' },
+                    pointLabels: { color: '#aaa9a2', font: { family: 'Manrope', size: 10, weight: '500' } },
                     ticks: { display: false }
                 }
             },
@@ -122,14 +122,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedDateDisp = document.getElementById('selected-date-display');
 
     if (selectedDateDisp && picker) {
-        selectedDateDisp.addEventListener('click', () => {
-            if (typeof picker.showPicker === 'function') {
-                picker.showPicker();
+        const calendar = initCustomCalendar({
+            initialDate: selectedDateVal || picker.value || getYYYYMMDD(new Date()),
+            onChange: (date) => {
+                picker.value = date;
+                picker.dispatchEvent(new Event('change'));
             }
         });
-
         picker.addEventListener('change', (e) => {
             const selectedDate = e.target.value;
+            calendar?.updateDate(selectedDate);
 
             renderTimeline(selectedDate);
             calculateAndRenderRadar(selectedDate);
@@ -179,10 +181,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Run Initializations
         const urlParams = new URLSearchParams(window.location.search);
-        picker.value = urlParams.get('date') || getYYYYMMDD(new Date());
+        picker.value = urlParams.get('date') || selectedDateVal || getYYYYMMDD(new Date());
+        calendar?.updateDate(picker.value);
         renderTimeline(picker.value);
         calculateAndRenderRadar(picker.value);
         renderHeatmap();
+        let heatmapWidth = 0;
+        const heatmapObserver = new ResizeObserver(entries => {
+            const width = Math.round(entries[0].contentRect.width);
+            if (width !== heatmapWidth) { heatmapWidth = width; renderHeatmap(); }
+        });
+        heatmapObserver.observe(document.getElementById('heatmap-container'));
 
         const initDateObj = new Date(picker.value + 'T12:00:00');
         selectedDateDisp.innerText = initDateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });

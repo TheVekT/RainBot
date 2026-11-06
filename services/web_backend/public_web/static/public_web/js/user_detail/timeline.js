@@ -70,8 +70,9 @@ function updateSliderTooltip(timestamp, clientX) {
         const channelIdStr = (mainUserHistoryPeriod && mainUserHistoryPeriod[3]) ? String(mainUserHistoryPeriod[3]) : String(currentChannelId);
         const channelName = (typeof channelsMapping !== 'undefined' && channelsMapping[channelIdStr]) ? channelsMapping[channelIdStr] : (channelIdStr ? `Channel #${channelIdStr}` : 'N/A');
 
-        channelLabelEl.innerText = `🔊 ${channelName}`;
-        channelLabelEl.className = 'text-[10px] text-indigo-400 font-bold uppercase tracking-wider mt-0.5 truncate';
+        channelLabelEl.innerHTML = VOICE_ICON;
+        channelLabelEl.append(document.createTextNode(channelName));
+        channelLabelEl.className = 'text-[10px] text-brand-400 font-bold uppercase tracking-wider mt-0.5 flex items-center gap-1.5';
 
         // Find channel participants
         const participants = activeVoiceUsers.filter(item => {
@@ -106,13 +107,13 @@ function updateSliderTooltip(timestamp, clientX) {
                 const stateStr = REVERSE_STATE_MAP[stateInt] || 'unknown';
 
                 const userRow = document.createElement('div');
-                userRow.className = `flex items-center justify-between text-[11px] py-0.5 ${isMainUser ? 'text-indigo-300 font-bold' : 'text-gray-300'}`;
+                userRow.className = `flex items-center justify-between text-[11px] py-0.5 ${isMainUser ? 'text-brand-300 font-bold' : 'text-gray-300'}`;
 
                 const nameContainer = document.createElement('div');
                 nameContainer.className = 'flex items-center gap-1.5 min-w-0';
 
                 const avatarCircle = document.createElement('div');
-                avatarCircle.className = "w-4.5 h-4.5 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-[9px] font-extrabold text-indigo-400 select-none uppercase shrink-0";
+                avatarCircle.className = "w-4.5 h-4.5 rounded-full bg-brand-600/20 border border-brand-500/30 flex items-center justify-center text-[9px] font-extrabold text-brand-400 select-none uppercase shrink-0";
                 if (userMeta.avatar_url) {
                     const img = document.createElement('img');
                     img.src = userMeta.avatar_url;
@@ -133,14 +134,14 @@ function updateSliderTooltip(timestamp, clientX) {
                 statusContainer.className = 'flex items-center gap-1';
 
                 const MIC_MUTE_SVG = `
-                <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
+                <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" stroke="#ef4444" stroke-width="2.5" />
                 </svg>
                 `;
 
                 const DEAF_SVG = `
-                <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4));">
+                <svg class="w-3.5 h-3.5 text-red-500 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.5a6.5 6.5 0 01-6.5-6.5V11a6.5 6.5 0 1113 0v1a6.5 6.5 0 01-6.5 6.5z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h1.5a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5H4.5A1.5 1.5 0 013 16.5v-3A1.5 1.5 0 014.5 12zM18 12h1.5a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5H18a1.5 1.5 0 01-1.5-1.5v-3A1.5 1.5 0 0118 12z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" stroke="#ef4444" stroke-width="2.5" />
@@ -259,8 +260,8 @@ function renderTimeline(targetDateStr) {
                 tooltip.style.top = `${e.clientY - 50}px`;
 
                 tooltip.innerHTML = `
-                    <div class="font-bold text-indigo-400">${stateStr.replace('_', ' ').toUpperCase()}</div>
-                    ${chName !== 'N/A' ? `<div class="text-gray-300 font-medium">🔊 ${chName}</div>` : ''}
+                    <div class="font-bold text-brand-400">${stateStr.replace('_', ' ').toUpperCase()}</div>
+                    ${chName !== 'N/A' ? `<div class="text-gray-300 font-medium flex items-center gap-1.5">${VOICE_ICON} ${chName}</div>` : ''}
                     <div class="text-gray-500 mt-0.5">${displayStart} — ${displayEnd}</div>
                 `;
             });

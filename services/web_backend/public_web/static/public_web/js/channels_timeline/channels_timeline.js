@@ -1,5 +1,5 @@
 const urlParams = new URLSearchParams(window.location.search);
-let currentDateString = urlParams.get('date') || getYYYYMMDD(new Date());
+let currentDateString = urlParams.get('date') || initialDateStr || getYYYYMMDD(new Date());
 let sliderPercentage = 0.5; // Defaults to 12:00 (mid-day)
 let isDraggingSlider = false;
 let highlightedChannelId = null;
@@ -62,6 +62,11 @@ function updateTimeView() {
     
     const timeLabel = document.getElementById('active-time-label');
     if (timeLabel) timeLabel.innerText = `${hh}:${mm}:${ss}`;
+    const timeInput = document.getElementById('timeline-time-input');
+    if (timeInput) {
+        timeInput.value = Math.round(sliderPercentage * 1439);
+        timeInput.setAttribute('aria-valuetext', `${hh}:${mm}`);
+    }
 
     // Re-render server room tree elements
     renderChannelTree(selectedTs);
@@ -212,11 +217,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             graphTooltip.innerHTML = `
-                <div class="font-bold text-indigo-400 text-center border-b border-gray-800/40 pb-1">${timeStr}</div>
+                <div class="font-bold text-brand-400 text-center border-b border-gray-800/40 pb-1">${timeStr}</div>
                 <div class="flex items-center gap-2 mt-1.5 text-xs">
                     <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${closestColor};"></span>
                     <span class="text-gray-300 font-bold">${closestCh.name}</span>
-                    <span class="font-bold text-indigo-400 font-mono ml-4">${closestVal} users</span>
+                    <span class="font-bold text-brand-400 font-mono ml-4">${closestVal} users</span>
                 </div>
             `;
 
@@ -251,6 +256,21 @@ document.addEventListener('DOMContentLoaded', () => {
         
         updateTimeView();
     });
+
+    const timeInput = document.getElementById('timeline-time-input');
+    if (timeInput) {
+        timeInput.addEventListener('input', () => {
+            sliderPercentage = Number(timeInput.value) / 1439;
+            updateTimeView();
+        });
+    }
+    // Recompute SVG coordinates when responsive layout changes.
+    let resizeFrame;
+    const resizeObserver = new ResizeObserver(() => {
+        cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(() => { renderTimelineChart(); updateTimeView(); });
+    });
+    resizeObserver.observe(captureArea);
 
     // Initialize display and triggers
     initializeDOMRooms();

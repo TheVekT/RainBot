@@ -1,0 +1,14 @@
+<div class="calendar-anchor">
+                <button type="button" id="custom-date-display" class="button" aria-expanded="false" aria-controls="custom-calendar-popup">
+                    {% include 'public_web/includes/calendar_icon.html' %}<span>Loading date…</span>
+                </button>
+                <div id="custom-calendar-popup" class="calendar-popup hidden" aria-label="Choose a date">
+                    <div class="calendar-header">
+                        <button type="button" id="cal-prev-btn" class="calendar-nav" aria-label="Previous month"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
+                        <span id="cal-month-year"></span>
+                        <button type="button" id="cal-next-btn" class="calendar-nav" aria-label="Next month"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button>
+                    </div>
+                    <div class="calendar-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+                    <div id="cal-days-grid" class="calendar-days"></div>
+                </div>
+            </div>
