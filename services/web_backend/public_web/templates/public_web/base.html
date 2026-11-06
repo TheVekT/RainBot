@@ -1,0 +1,35 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RainBot Analytics{% endblock %}</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    {% include 'public_web/includes/theme.html' %}
+    <link rel="shortcut icon" href="{% static 'public_web/rake.ico' %}">
+    <link rel="stylesheet" href="{% static 'public_web/css/global.css' %}?v=20261106">
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="{% url 'public_web:user_list' %}" aria-label="RainBot Analytics home">
+                <svg class="brand__mark" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15a4 4 0 0 1 0-8h1a5 5 0 0 1 9.6-1A4.5 4.5 0 0 1 18 15M8 17l-1 3m6-3-1 3m6-3-1 3"/></svg>
+                <span>RainBot <span class="brand__suffix">Analytics</span></span>
+            </a>
+            <nav class="site-nav" aria-label="Main navigation">
+                <span class="site-nav__disabled" aria-disabled="true" title="Rain history is not available yet">Rains History</span>
+                <a href="{% url 'public_web:chronology' %}" {% block chronology_active %}{% endblock %}>Voice Chronology</a>
+                <a href="{% url 'public_web:user_list' %}" {% block users_active %}{% endblock %}>Discord Users</a>
+            </nav>
+        </div>
+    </header>
+    <main id="main-content" class="page-shell {% block page_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+    {% block overlays %}{% endblock %}
+    {% block scripts %}{% endblock %}
+</body>
+</html>

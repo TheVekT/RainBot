@@ -1,15 +1,41 @@
-.custom-calendar-day {
-    transition: all 0.15s ease-in-out;
-}
-.custom-calendar-day:hover:not(.empty-day):not(.selected-day) {
-    background-color: rgba(99, 102, 241, 0.25);
-    color: #a5b4fc;
-}
-.channel-path {
-    transition: stroke-width 0.2s ease, opacity 0.2s ease, stroke 0.2s ease;
-}
-.channel-card-highlight {
-    border-color: var(--highlight-color) !important;
-    box-shadow: 0 0 12px var(--shadow-color) !important;
-    background: rgba(31, 41, 55, 0.7) !important;
+.workspace-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin: 0; padding: 0 0 20px; border-bottom: 1px solid var(--surface-border); }
+.workspace-toolbar h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.workspace-toolbar p { margin: 6px 0 0; }
+.workspace-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
+.time-readout { display: flex; flex-direction: column; gap: 2px; min-width: 95px; padding-left: 24px; border-left: 1px solid var(--surface-border); }
+.time-readout output { color: var(--accent); font-size: 17px; font-weight: 600; }
+.chronology-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+.rooms-pane { min-width: 0; padding: 24px 16px 24px 0; border-right: 1px solid var(--rule); }
+.rooms-pane .section-heading { padding: 0; }
+.activity-pane { min-width: 0; padding: 24px 0 24px 24px; }
+.chronology-chart { height: clamp(160px, calc(100dvh - 430px), 300px); }
+.chart-area { margin-top: 24px; }
+.chart-axis { display: flex; justify-content: space-between; gap: 4px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 11px; color: var(--muted); }
+.chart-legend { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--rule); }
+.legend-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 5px; color: var(--muted); background: transparent; font-size: 12px; transition: background-color .15s; }
+.legend-chip:hover, .legend-chip:focus-visible { background: var(--surface-raised); color: var(--text); }
+.legend-chip span:last-child { overflow-wrap: anywhere; }
+#timeline-slider { background: var(--accent); }
+.timeline-handle { position: absolute; top: -5px; left: -4px; width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+#hover-guide-line { background: #d0ac6470; }
+.time-scrubber { margin-top: 22px; display: flex; align-items: center; gap: 16px; }
+.time-scrubber label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.time-scrubber input { flex: 1; min-width: 0; height: 24px; accent-color: var(--accent); cursor: pointer; }
+.channel-path { transition: stroke-width .15s, opacity .15s; }
+.room-card-wrapper { border-bottom: 1px solid var(--rule); border-radius: 4px; transition: opacity .15s, background-color .15s; }
+.channel-card-highlight { background: #24231e !important; }
+.room-card-wrapper .ui-icon { color: var(--muted); width: 16px; height: 16px; }
+@media (max-width: 1000px) { .chronology-layout { grid-template-columns: 230px minmax(0, 1fr); } .activity-pane { padding: 24px 0 24px 20px; } }
+@media (max-width: 760px) {
+    .chronology-layout { display: flex; flex-direction: column; }
+    .activity-pane { order: 0; padding: 20px 0; }
+    .rooms-pane { order: 1; padding: 20px 0 0; border-right: 0; border-top: 1px solid var(--rule); }
+    .workspace-toolbar { padding: 0 0 18px; gap: 18px; }
+    .workspace-controls { width: 100%; justify-content: space-between; gap: 12px; }
+    .time-readout { padding-left: 12px; min-width: 80px; }
+    .time-readout output { font-size: 15px; }
+    .calendar-anchor .button { padding: 10px; font-size: 12px; }
+    .calendar-popup { left: 0; right: auto; }
+    .chronology-chart { height: clamp(160px, 25dvh, 220px); }
+    .chart-axis { font-size: 10px; }
 }

@@ -115,7 +115,7 @@ function renderTimelineChart() {
         line.setAttribute("y1", yVal);
         line.setAttribute("x2", "100%");
         line.setAttribute("y2", yVal);
-        line.setAttribute("stroke", "rgba(75, 85, 99, 0.15)");
+        line.setAttribute("stroke", "rgba(170, 169, 162, 0.14)");
         line.setAttribute("stroke-width", "1");
         svg.appendChild(line);
     }
@@ -176,14 +176,21 @@ function renderTimelineChart() {
         }
 
         // Add legend chip
-        const legendChip = document.createElement('div');
-        legendChip.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-900/60 cursor-pointer select-none transition-all hover:bg-gray-800/80";
+        const legendChip = document.createElement('button');
+        legendChip.type = 'button';
+        legendChip.className = "legend-chip";
         legendChip.innerHTML = `
             <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${chColor};"></span>
-            <span class="text-xs text-gray-300 font-semibold truncate max-w-[120px]">${ch.name}</span>
+            <span class="text-xs">${ch.name}</span>
         `;
         legendChip.addEventListener('mouseenter', () => highlightChannel(chId));
         legendChip.addEventListener('mouseleave', () => unhighlightChannel());
+        legendChip.addEventListener('focus', () => highlightChannel(chId));
+        legendChip.addEventListener('blur', () => unhighlightChannel());
+        legendChip.addEventListener('click', () => {
+            if (highlightedChannelId === chId) unhighlightChannel();
+            else highlightChannel(chId);
+        });
         legend.appendChild(legendChip);
     });
 

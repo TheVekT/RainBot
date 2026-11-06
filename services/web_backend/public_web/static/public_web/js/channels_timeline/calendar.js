@@ -34,7 +34,7 @@ function initCustomCalendar(options) {
         // Empty slots for preceding month wrap
         for (let i = 0; i < firstDayOfMonth; i++) {
             const cell = document.createElement('span');
-            cell.className = 'w-8 h-8 empty-day';
+            cell.className = 'empty-day';
             grid.appendChild(cell);
         }
 
@@ -50,13 +50,16 @@ function initCustomCalendar(options) {
             const cellDate = new Date(year, month, d);
             const isSelected = (year === selYear && month === selMonth && d === selDay);
 
-            button.className = `w-8 h-8 text-[11px] font-bold rounded-lg transition-all custom-calendar-day flex items-center justify-center cursor-pointer select-none
-                ${isSelected ? 'bg-indigo-600 text-white selected-day' : 'text-gray-300 hover:bg-indigo-600/20'}`;
-            
+            button.type = 'button';
+            button.className = `custom-calendar-day ${isSelected ? 'selected-day' : ''}`;
+            button.setAttribute('aria-label', cellDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+            button.setAttribute('aria-pressed', String(isSelected));
+
             button.addEventListener('click', () => {
                 const nextDateStr = getYYYYMMDD(cellDate);
                 currentDateString = nextDateStr;
                 pickerPopup.classList.add('hidden');
+                pickerTrigger.setAttribute('aria-expanded', 'false');
                 updateTriggerLabel();
                 if (typeof options.onChange === 'function') {
                     options.onChange(nextDateStr);
@@ -70,6 +73,7 @@ function initCustomCalendar(options) {
     pickerTrigger.addEventListener('click', (e) => {
         e.stopPropagation();
         pickerPopup.classList.toggle('hidden');
+        pickerTrigger.setAttribute('aria-expanded', String(!pickerPopup.classList.contains('hidden')));
         if (!pickerPopup.classList.contains('hidden')) {
             const currentSelected = new Date(currentDateString + 'T12:00:00');
             pickerCurrentDate = new Date(currentSelected);
@@ -98,6 +102,21 @@ function initCustomCalendar(options) {
     document.addEventListener('click', (e) => {
         if (pickerPopup && !pickerPopup.contains(e.target) && e.target !== pickerTrigger && !pickerTrigger.contains(e.target)) {
             pickerPopup.classList.add('hidden');
+                pickerTrigger.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    pickerPopup.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            pickerPopup.classList.add('hidden');
+            pickerTrigger.setAttribute('aria-expanded', 'false');
+            pickerTrigger.focus();
+        }
+    });
+    pickerTrigger.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            pickerPopup.classList.add('hidden');
+            pickerTrigger.setAttribute('aria-expanded', 'false');
         }
     });
 

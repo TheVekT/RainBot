@@ -46,8 +46,8 @@ The Django backend serves a modern web interface for viewing charts, rooms grid 
 
 ### Personal User Statistics with Timeline
 
-<img width="1903" height="940" alt="Personal User Statistics" src="https://github.com/user-attachments/assets/d4c35601-9356-47f1-b6e8-96fbd555999f" />
+<img width="1903" height="940" alt="Personal User Statistics" src="https://github.com/user-attachments/assets/11137fb1-1dbb-4754-b992-7bab47c49fdd" />
 
 ### Voice Channels Timeline
 
-<img width="1917" height="943" alt="Voice Channels Timeline" src="https://github.com/user-attachments/assets/622e23d6-b5b9-4cdf-9df1-abecc36c7944" />
+<img width="1917" height="943" alt="Voice Channels Timeline" src="https://github.com/user-attachments/assets/d7d84f75-3f27-4e90-8d98-3c1460dbdd51" />
