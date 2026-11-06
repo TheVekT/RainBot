@@ -31,7 +31,7 @@ YTDL_OPTS = {
     "skip_download": True,
     "extractor_args": {
         "youtube": {
-            "player_client": ["android_vr"],
+            "player_client": ["web_embedded"],
         },
     },
 }
