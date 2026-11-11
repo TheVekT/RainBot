@@ -5,13 +5,38 @@
 {% block content %}
 <header class="page-heading">
     <div><h1>Discord users</h1><p>Presence, voice sessions and activity history for your server.</p></div>
-    <div class="search-field"><label for="user-search-input">Find a user</label><input type="search" id="user-search-input" placeholder="Nickname or @username" autocomplete="off"></div>
+    <div class="directory-filters">
+        <div class="search-field"><label for="user-search-input">Find a user</label><input type="search" id="user-search-input" placeholder="Nickname or @username" autocomplete="off"></div>
+        <div class="directory-filter">
+            <button type="button" class="filter-button" id="filter-toggle" aria-label="Filter users" aria-expanded="false" aria-controls="filter-panel" title="Filter users">
+                <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/><circle cx="8" cy="7" r="1.5" fill="var(--surface)"/><circle cx="16" cy="12" r="1.5" fill="var(--surface)"/></svg>
+                <span class="filter-button__indicator" id="filter-indicator" hidden aria-hidden="true"></span>
+            </button>
+            <div class="filter-panel" id="filter-panel" hidden>
+                <div class="filter-panel__heading">Filter users</div>
+                <fieldset class="filter-group">
+                    <legend>Show statuses</legend>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="online" checked><span>Online</span></label>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="offline" checked><span>Offline</span></label>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="voice_online" checked><span>Voice online</span></label>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="voice_mute" checked><span>Voice muted</span></label>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="voice_deaf" checked><span>Voice deafened</span></label>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="voice_afk" checked><span>Voice AFK</span></label>
+                    <label class="filter-option"><input class="status-filter" type="checkbox" value="voice_alone" checked><span>Alone in voice</span></label>
+                </fieldset>
+                <fieldset class="filter-group filter-group--members">
+                    <legend>Membership</legend>
+                    <label class="filter-option"><input type="checkbox" id="show-former-members"><span>Show users who left</span></label>
+                </fieldset>
+            </div>
+        </div>
+    </div>
 </header>
 <section class="panel directory" aria-label="Server users">
     <div class="directory__head"><span>User</span><span class="directory__id-label">Discord ID</span><button type="button" id="status-sort" class="sort-status" aria-label="Status: original order. Sort active users first.">Status <span id="status-sort-mode" class="sort-status__mode">↕</span></button><span></span></div>
     <div id="users-grid">
     {% for user in users %}
-        <article class="user-card" data-status="{{ user.current_status }}" data-search-query="{{ user.nickname|lower }} {{ user.username|lower }}">
+        <article class="user-card" data-status="{{ user.current_status }}" data-member="{% if user.is_member %}true{% else %}false{% endif %}" data-search-query="{{ user.nickname|lower }} {{ user.username|lower }}"{% if not user.is_member %} hidden{% endif %}>
             <div class="user-identity">
                 {% if user.avatar_url %}<img src="{{ user.avatar_url }}" alt="" class="avatar" width="44" height="44" loading="lazy">
                 {% else %}<div class="avatar avatar--fallback" aria-hidden="true">{{ user.nickname|slice:':1'|upper }}</div>{% endif %}
@@ -25,10 +50,10 @@
         <div class="empty-state"><h2>No users yet</h2><p>Tracked server accounts will appear here.</p></div>
     {% endfor %}
     </div>
-    <div id="search-empty" class="empty-state hidden"><h2>No matching users</h2><p>Try another nickname or username.</p></div>
-    <div id="user-count" class="directory__footer" role="status" aria-live="polite">{{ users|length }} users</div>
+    <div id="search-empty" class="empty-state" hidden><h2>No matching users</h2><p>Try another search or adjust your filters.</p></div>
+    <div id="user-count" class="directory__footer" role="status" aria-live="polite"></div>
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="{% static 'public_web/js/user_list.js' %}?v=20261106"></script>
+<script src="{% static 'public_web/js/user_list.js' %}?v=20261111b"></script>
 {% endblock %}

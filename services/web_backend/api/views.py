@@ -57,25 +57,32 @@ async def internal_rain_event(request):
 
 
 async def rain_stream(request):
-    """
-    Public SSE connection endpoint consumed by external RainCollector clients.
-    """
     async def event_generator():
         queue = asyncio.Queue()
         broadcaster.add_listener(queue)
+
         try:
+            yield ": connected\n\n"
+
             while True:
-                # Execution suspends until a new message arrives in the queue
-                payload = await queue.get()
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=20)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    continue
+
                 yield f"data: {payload}\n\n"
                 queue.task_done()
-        except asyncio.CancelledConnectionError:
-            # Safely handled when client disconnects or connection drops
-            pass
+
+        except asyncio.CancelledError:
+            raise
         finally:
             broadcaster.remove_listener(queue)
 
-    response = StreamingHttpResponse(event_generator(), content_type="text/event-stream")
+    response = StreamingHttpResponse(
+        event_generator(),
+        content_type="text/event-stream"
+    )
     response["Cache-Control"] = "no-cache"
-    response["X-Accel-Buffering"] = "no"  # Prevents Nginx/Proxy from buffering the stream
+    response["X-Accel-Buffering"] = "no"
     return response

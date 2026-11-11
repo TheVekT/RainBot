@@ -13,6 +13,7 @@ class DiscordAccount(models.Model):
     nickname = models.CharField(max_length=255, help_text="Current Discord nickname")
     avatar_url = models.TextField(null=True, blank=True, help_text="Discord avatar image URL")
     current_status = models.CharField(max_length=50, help_text="Current real-time status of the user")
+    is_member = models.BooleanField(default=True, help_text="Whether the account currently belongs to the server")
 
     class Meta:
         db_table = 'discord_accounts'
