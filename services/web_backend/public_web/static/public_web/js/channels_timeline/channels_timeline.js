@@ -89,6 +89,26 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTimeView();
     }
 
+    // A typical mouse-wheel notch moves roughly five seconds; smaller trackpad
+    // deltas provide finer control. Leave browser zoom and horizontal scrolling alone.
+    captureArea.parentElement.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || e.deltaY === 0) return;
+
+        const localStart = new Date(`${currentDateString}T00:00:00`).getTime();
+        const localEnd = new Date(`${currentDateString}T23:59:59.999`).getTime();
+        const daySeconds = (localEnd - localStart) / 1000;
+        if (!(daySeconds > 0)) return;
+
+        const deltaPixels = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? captureArea.clientHeight : 1);
+        const deltaSeconds = Math.max(-15, Math.min(15, deltaPixels * 0.05));
+        const nextPercentage = Math.max(0, Math.min(1, sliderPercentage + deltaSeconds / daySeconds));
+        if (nextPercentage === sliderPercentage) return;
+
+        e.preventDefault();
+        sliderPercentage = nextPercentage;
+        updateTimeView();
+    }, { passive: false });
+
     captureArea.addEventListener('mousedown', (e) => {
         isDraggingSlider = true;
         handleTimelineMove(e.clientX);
