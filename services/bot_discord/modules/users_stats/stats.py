@@ -1,268 +1,403 @@
-import disnake
-from disnake.ext import tasks, commands
+"""Event-driven Discord presence/voice statistics tracker."""
+
 import asyncio
 import logging
+from collections import deque
 from datetime import datetime, timedelta, timezone
+from itertools import islice
+
+import disnake
+from disnake.ext import commands, tasks
+
 from .database.interface import AbstractPresenceRepository
 
 logger = logging.getLogger(__name__)
 
+
 def get_member_state(member: disnake.Member) -> str:
-    """
-    Determines the current voice or online presence state of a guild member.
-    """
+    """Resolve the combined presence and voice state (priority matters)."""
     if member.status is disnake.Status.offline:
         return "offline"
-    elif member.voice:
-        if member.voice.channel == member.guild.afk_channel:
-            return "voice_afk"
-        elif len(member.voice.channel.members) == 1:
-            return "voice_alone"
-        elif member.voice.self_deaf:
-            return "voice_deaf"
-        elif member.voice.self_mute:
-            return "voice_mute"
-        else:
-            return "voice_online"
-    else:
+    voice = member.voice
+    if not voice or not voice.channel:
         return "online"
+    if voice.channel == member.guild.afk_channel:
+        return "voice_afk"
+    if len(voice.channel.members) == 1:
+        return "voice_alone"
+    if voice.self_deaf:
+        return "voice_deaf"
+    if voice.self_mute:
+        return "voice_mute"
+    return "voice_online"
 
 
 class UserPresenceTracker:
-    """
-    Tracks and records the presence status of Discord guild members over time.
-    Separates high-frequency interval updates from background profile management.
-    """
+    EVENTS = ("on_presence_update", "on_voice_state_update", "on_member_join", "on_member_remove")
+    WRITE_BATCH_SIZE = 1000  # One batch every 5 seconds; statuses are coalesced per account.
+
     def __init__(self, bot: commands.Bot, guild_id: int, repo: AbstractPresenceRepository, retention_days: int = 365):
-        self.bot = bot
-        self.guild_id = guild_id
-        self.repo = repo
+        self.bot, self.guild_id, self.repo = bot, guild_id, repo
         self.retention_days = retention_days
-        self.user_states = {}  # {account_id: {"state": str, "channel_id": int | None, "start_time": datetime(UTC)}}
-        self.guild = None
+        self.guild: disnake.Guild | None = None
+        self.user_states: dict[int, dict] = {}
+        self._period_queue: deque[tuple] = deque()
+        self._pending_status: dict[int, str] = {}
+        self._pending_members: dict[int, disnake.Member] = {}
+        self._pending_membership: dict[int, bool] = {}
+        self._departed: set[int] = set()
+        self._write_lock = asyncio.Lock()
+        self._membership_lock = asyncio.Lock()
+        self._ready = self._stopping = False
+        self._skip_first_fixation = self._skip_first_daily = True
 
-        self._start()
+        for name in self.EVENTS:
+            bot.add_listener(getattr(self, name))
+        bot.add_listener(self._on_gateway_ready, "on_ready")
+        self._init_task = asyncio.create_task(self.on_ready())
 
-    def _start(self) -> None:
-        asyncio.create_task(self.on_ready())
+    def _tracked(self, member: disnake.Member) -> bool:
+        return (member.guild.id == self.guild_id and
+                (not member.bot or member.id == self.bot.user.id))
+
+    @staticmethod
+    def _snapshot(member: disnake.Member, at: datetime) -> tuple:
+        voice = member.voice
+        channel_id = voice.channel.id if voice and voice.channel else None
+        return member, get_member_state(member), channel_id, at
 
     async def on_ready(self) -> None:
-        await self.bot.wait_until_ready()
-        self.guild = self.bot.get_guild(self.guild_id)
-        
-        if not self.guild:
-            logger.warning(f"[UserStats] Guild with ID {self.guild_id} not found.")
+        """Load initial profiles, then seed every currently cached member's state."""
+        try:
+            await self.bot.wait_until_ready()
+            if self._stopping:
+                return
+            self.guild = self.bot.get_guild(self.guild_id)
+            if not self.guild:
+                logger.error("[UserStats] Guild %s not found", self.guild_id)
+                return
+
+            # Keep membership events ordered after the snapshot and its DB writes.
+            async with self._membership_lock:
+                async with self._write_lock:
+                    members, _ = await self._sync_profiles_locked()
+                if self._stopping:
+                    return
+
+                now = datetime.now(timezone.utc)
+                for member in members:
+                    if self._tracked(member):
+                        _, state, channel_id, _ = self._snapshot(member, now)
+                        self.user_states[member.id] = dict(state=state, channel_id=channel_id, start_time=now)
+                        self._pending_status[member.id] = state
+                self._ready = True
+            for loop in (self.write_queue, self.periodic_state_fixation, self.daily_profile_sync,
+                         self.clean_old_stats, self.compress_stats):
+                loop.start()
+            logger.info("[UserStats] Initialized %s members in %s", len(self.user_states), self.guild.name)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[UserStats] Initialization failed")
+
+    async def _on_gateway_ready(self) -> None:
+        """Reconcile cached states after a Gateway reconnect (missed events are possible)."""
+        if self._ready and not self._stopping and self.guild:
+            try:
+                await self._sync_profiles()
+                await asyncio.gather(*(self.update_user_state(m) for m in self.guild.members if self._tracked(m)))
+            except Exception:
+                logger.exception("[UserStats] Reconnect synchronization failed")
+
+    async def on_presence_update(self, before: disnake.Member, after: disnake.Member) -> None:
+        if self._ready and not self._stopping and self._tracked(after):
+            await self.update_user_state(after)
+
+    async def on_voice_state_update(self, member: disnake.Member,
+                                    before: disnake.VoiceState, after: disnake.VoiceState) -> None:
+        if not self._ready or self._stopping or member.guild.id != self.guild_id:
             return
-        
-        logger.info(f"[UserStats] Tracker initialized for guild: {self.guild.name}")
-        self.periodic_stats_update.start()
-        self.periodic_state_fixation.start()
-        self.clean_old_stats.start()
-        self.compress_stats.start()
-        self.daily_profile_sync.start()
+        # Joining/leaving a channel also changes voice_alone for its other members.
+        affected = {member.id: member}
+        if before.channel != after.channel:
+            for channel in (before.channel, after.channel):
+                if channel:
+                    affected.update((m.id, m) for m in channel.members)
+
+        now = datetime.now(timezone.utc)
+        snapshots = [self._snapshot(m, now) for m in affected.values() if self._tracked(m)]
+        await asyncio.gather(*(self._apply_state(*snapshot) for snapshot in snapshots))
+
+    async def on_member_join(self, member: disnake.Member) -> None:
+        if self._stopping or not self._tracked(member):
+            return
+        at = datetime.now(timezone.utc)
+        if not self._ready:
+            await asyncio.shield(self._init_task)
+        async with self._membership_lock:
+            if not self._ready or self._stopping:
+                return
+            # Upsert even for a returning member, then apply the latest membership
+            # after the account exists. A rapid join/leave is coalesced safely.
+            self._pending_members[member.id] = member
+            self._pending_membership[member.id] = True
+            self._departed.discard(member.id)
+            await self._apply_state(*self._snapshot(member, at))
+
+    async def on_member_remove(self, member: disnake.Member) -> None:
+        if self._stopping or not self._tracked(member):
+            return
+        now = datetime.now(timezone.utc)
+        if not self._ready:
+            await asyncio.shield(self._init_task)
+        async with self._membership_lock:
+            if not self._ready or self._stopping:
+                return
+            info = self.user_states.pop(member.id, None)
+            if info:
+                self.record_state_period(member.id, info["state"], info["start_time"], now, info["channel_id"])
+            self._departed.add(member.id)
+            self._pending_membership[member.id] = False
+
+        if member.voice and member.voice.channel:
+            peers = [m for m in member.voice.channel.members if m.id != member.id and self._tracked(m)]
+            await asyncio.gather(*(self.update_user_state(m) for m in peers))
 
     async def update_user_state(self, member: disnake.Member) -> None:
-        if member.bot and member.id != self.bot.user.id:
+        if self._ready and not self._stopping and self._tracked(member):
+            await self._apply_state(*self._snapshot(member, datetime.now(timezone.utc)))
+
+    async def _apply_state(self, member: disnake.Member, state: str,
+                           channel_id: int | None, at: datetime) -> None:
+        if self._stopping or member.id in self._departed:
             return
-
-        account_id = member.id
-        current_state = get_member_state(member)
-        current_channel_id = member.voice.channel.id if member.voice and member.voice.channel else None
-        now_utc = datetime.now(timezone.utc)
-        
-        previous_state_info = self.user_states.get(account_id)
-        
-        if previous_state_info:
-            previous_state = previous_state_info["state"]
-            previous_channel_id = previous_state_info["channel_id"]
-            start_time = previous_state_info["start_time"]
+        old = self.user_states.get(member.id)
+        if old and (old["state"], old["channel_id"]) == (state, channel_id):
+            return
+        if old:
+            at = max(at, old["start_time"])
+            self.record_state_period(member.id, old["state"], old["start_time"], at, old["channel_id"])
         else:
-            previous_state = None
-            previous_channel_id = None
-            start_time = now_utc
-            
-        if current_state != previous_state or current_channel_id != previous_channel_id:
-            if previous_state is not None:
-                await self.record_state_period(member, previous_state, start_time, now_utc, previous_channel_id)
-            self.user_states[account_id] = {"state": current_state, "channel_id": current_channel_id, "start_time": now_utc}
+            self._pending_members[member.id] = member  # Create a new FK account in the writer.
+        self.user_states[member.id] = dict(state=state, channel_id=channel_id, start_time=at)
+        self._pending_status[member.id] = state  # Repeated mute/unmute overwrites the pending DB status.
 
-    async def record_state_period(self, member: disnake.Member, state: str, start_time: datetime, end_time: datetime, channel_id: int | None = None) -> None:
-        account_id = member.id
-        
-        # Ensure channel entity is verified in DB tracking layer before presence insertion
-        if channel_id and not await self.repo.is_channel_exist(channel_id):
-            ch_obj = self.guild.get_channel(channel_id) if self.guild else None
-            ch_name = ch_obj.name if ch_obj else f"Unknown Channel {channel_id}"
-            await self.repo.create_channel(channel_id, ch_name, is_active=True)
+    def record_state_period(self, account_id: int, state: str, start_time: datetime,
+                            end_time: datetime, channel_id: int | None = None) -> None:
+        if start_time >= end_time:
+            return
+        self.record_period_split(account_id, state, start_time, end_time, channel_id)
 
-        # 1. Immediate interval insert to prevent gaps or polling lag
-        if start_time.date() != end_time.date():
-            await self.record_period_split(account_id, state, start_time, end_time, channel_id)
-        else:
-            await self.repo.save_period(account_id, state, start_time, end_time, channel_id)
-        
-        # 2. Fire and forget background synchronization for profile accounts table
-        asyncio.create_task(self._sync_profile_background(member))
+    def _queue_period(self, period: tuple) -> None:
+        # Do not modify an entry a concurrent writer may already have copied.
+        # Older periods are consolidated by compress_records instead.
+        self._period_queue.append(period)
 
-    async def record_period_split(self, account_id: int, state: str, dt_start: datetime, dt_end: datetime, channel_id: int | None = None) -> None:
+    def record_period_split(self, account_id: int, state: str, dt_start: datetime,
+                            dt_end: datetime, channel_id: int | None = None) -> None:
         while dt_start.date() < dt_end.date():
-            end_of_day = datetime.combine(dt_start.date(), datetime.max.time(), tzinfo=timezone.utc)
-            if end_of_day >= dt_start:
-                await self.repo.save_period(account_id, state, dt_start, end_of_day, channel_id)
-            dt_start = datetime.combine(dt_start.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
-        
+            midnight = datetime.combine(dt_start.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+            self._queue_period((account_id, state, dt_start, midnight, channel_id))
+            dt_start = midnight
         if dt_start < dt_end:
-            await self.repo.save_period(account_id, state, dt_start, dt_end, channel_id)
+            self._queue_period((account_id, state, dt_start, dt_end, channel_id))
 
-    async def _sync_profile_background(self, member: disnake.Member) -> None:
-        """Background profile execution task ensuring existence before tracking status changes."""
-        try:
-            account_id = member.id
-            current_status = get_member_state(member)
-            
-            exists = await self.repo.is_account_exist(account_id)
-            if not exists:
-                avatar_url = str(member.display_avatar.url) if member.display_avatar else ""
-                await self.repo.create_account(
-                    account_id=account_id,
-                    username=member.name,          # Передаем глобальный логин
-                    nickname=member.display_name,  # Серверное имя
-                    avatar_url=avatar_url,
-                    current_status=current_status
-                )
-            else:
-                await self.repo.update_account_status(account_id, current_status)
-        except Exception as e:
-            logger.error(f"Error in background profile sync for user {member.id}: {e}")
+    async def _sync_profile(self, member: disnake.Member, state: str) -> None:
+        if await self.repo.is_account_exist(member.id):
+            await self.repo.update_account_status(member.id, state)
+        else:
+            avatar = str(member.display_avatar.url) if member.display_avatar else ""
+            await self.repo.create_account(member.id, member.name, member.display_name, avatar, state)
 
-    @tasks.loop(seconds=3)
-    async def periodic_stats_update(self) -> None:
-        if not self.guild:
-            return
-        tasks_list = [self.update_user_state(member) for member in self.guild.members]
-        await asyncio.gather(*tasks_list, return_exceptions=True)
+    def _flush_one(self, account_id: int, now: datetime) -> None:
+        info = self.user_states.get(account_id)
+        if info and info["start_time"] < now:
+            self.record_state_period(account_id, info["state"], info["start_time"], now, info["channel_id"])
+            info["start_time"] = now
+
+    async def _drain_queue(self, limit: int | None = WRITE_BATCH_SIZE) -> None:
+        """Single writer; failures leave untouched entries queued for retry."""
+        async with self._write_lock:
+            try:
+                for uid, member in list(self._pending_members.items())[:limit]:
+                    status = self._pending_status.get(uid, get_member_state(member))
+                    await self._sync_profile(member, status)
+                    if self._pending_members.get(uid) is member:
+                        self._pending_members.pop(uid, None)
+                    if self._pending_status.get(uid) == status:
+                        self._pending_status.pop(uid, None)
+
+                batch = list(islice(self._period_queue, limit or self.WRITE_BATCH_SIZE))
+                # A batch may contain a newcomer beyond the pending-member slice.
+                for uid in {period[0] for period in batch}:
+                    member = self._pending_members.get(uid)
+                    if member:
+                        status = self._pending_status.get(uid, get_member_state(member))
+                        await self._sync_profile(member, status)
+                        if self._pending_members.get(uid) is member:
+                            self._pending_members.pop(uid, None)
+                        if self._pending_status.get(uid) == status:
+                            self._pending_status.pop(uid, None)
+                for channel_id in {period[4] for period in batch if period[4] is not None}:
+                    if not await self.repo.is_channel_exist(channel_id):
+                        channel = self.guild.get_channel(channel_id) if self.guild else None
+                        name = channel.name if channel else f"Unknown Channel {channel_id}"
+                        await self.repo.create_channel(channel_id, name, channel is not None)
+                if batch:
+                    await self.repo.bulk_save_periods(batch)
+                    for _ in batch:
+                        self._period_queue.popleft()  # Remove only after the entire batch succeeds.
+
+                for uid, is_member in list(self._pending_membership.items())[:limit]:
+                    if uid in self._pending_members:
+                        continue
+                    await self.repo.set_account_membership(uid, is_member)
+                    if self._pending_membership.get(uid) == is_member:
+                        self._pending_membership.pop(uid, None)
+
+                for uid, status in list(self._pending_status.items())[:limit]:
+                    if uid in self._pending_members:
+                        continue
+                    await self.repo.update_account_status(uid, status)
+                    if self._pending_status.get(uid) == status:
+                        self._pending_status.pop(uid, None)
+            except Exception:
+                logger.exception("[UserStats] Queue write failed; pending entries will be retried")
+
+    @tasks.loop(seconds=5)
+    async def write_queue(self) -> None:
+        await self._drain_queue()
 
     @tasks.loop(minutes=10)
     async def periodic_state_fixation(self) -> None:
-        if not self.guild:
+        if self._skip_first_fixation:
+            self._skip_first_fixation = False
             return
-        now_utc = datetime.now(timezone.utc)
-        
-        for account_id in list(self.user_states.keys()):
-            state_info = self.user_states.get(account_id)
-            if not state_info:
+        now = datetime.now(timezone.utc)
+        for uid in list(self.user_states):
+            self._flush_one(uid, now)
+
+    async def _sync_profiles(self) -> None:
+        async with self._membership_lock:
+            async with self._write_lock:
+                guild = self.bot.get_guild(self.guild_id)
+                if guild is None:
+                    raise RuntimeError("Guild is not present in the current Discord session")
+                self.guild = guild
+                await self._sync_profiles_locked()
+
+    async def _sync_profiles_locked(self) -> tuple[list[disnake.Member], bool]:
+        # A partial member cache must never be interpreted as people leaving.
+        # chunk() explicitly requests the full guild member list.
+        if self.guild.unavailable:
+            raise RuntimeError("Guild is unavailable; profile synchronization skipped")
+        try:
+            chunk_members = await asyncio.wait_for(self.guild.chunk(cache=True), timeout=30)
+        except asyncio.TimeoutError:
+            logger.warning("[UserStats] Timed out loading guild members; membership reconciliation skipped")
+            chunk_members = None
+        if self.guild.unavailable:
+            raise RuntimeError("Guild became unavailable during synchronization")
+        # chunk() member objects lack presence data; use the cache for statuses,
+        # but use the returned IDs for membership (the cache may contain stale entries).
+        members = ([self.guild.get_member(m.id) or m for m in chunk_members]
+                   if chunk_members is not None else list(self.guild.members))
+        complete = (chunk_members is not None and self.guild.member_count is not None and
+                    len({member.id for member in chunk_members}) == self.guild.member_count)
+        if not complete:
+            logger.warning("[UserStats] Guild member cache is incomplete; skipping membership reconciliation")
+
+        channels = [(ch.id, ch.name, True) for ch in self.guild.voice_channels]
+        await self.repo.sync_channels(channels)
+
+        accounts = []
+        for member in members:
+            if not self._tracked(member):
                 continue
-            
-            last_time = state_info["start_time"]
-            state = state_info["state"]
-            channel_id = state_info["channel_id"]
-            
-            # Update start_time BEFORE any await — prevents race condition
-            # with periodic_stats_update reading stale start_time during DB write
-            self.user_states[account_id]["start_time"] = now_utc
-            
-            member = self.guild.get_member(account_id)
-            if member:
-                await self.record_state_period(member, state, last_time, now_utc, channel_id)
-            else:
-                if channel_id and not await self.repo.is_channel_exist(channel_id):
-                    ch_obj = self.guild.get_channel(channel_id) if self.guild else None
-                    ch_name = ch_obj.name if ch_obj else f"Unknown Channel {channel_id}"
-                    await self.repo.create_channel(channel_id, ch_name, is_active=True)
-                
-                if last_time.date() != now_utc.date():
-                    await self.record_period_split(account_id, state, last_time, now_utc, channel_id)
-                else:
-                    await self.repo.save_period(account_id, state, last_time, now_utc, channel_id)
+            avatar = str(member.display_avatar.url) if member.display_avatar else ""
+            accounts.append((member.id, member.name, member.display_name, avatar, get_member_state(member)))
+        if accounts:
+            await self.repo.bulk_upsert_accounts(accounts)
+        if complete:
+            tracked_ids = {account[0] for account in accounts}
+            await self.repo.reconcile_members(list(tracked_ids))
+            # Pending lifecycle writes predate this authoritative snapshot.
+            # Preserve them for newly-created accounts, but use the snapshot's
+            # membership so they cannot later undo reconciliation.
+            for uid in self._pending_membership:
+                self._pending_membership[uid] = uid in tracked_ids
+            if self._ready:
+                now = datetime.now(timezone.utc)
+                for uid in set(self.user_states) - tracked_ids:
+                    # The departure was missed, so its time is unknown. Discard
+                    # the unflushed tail rather than fabricate activity up to now.
+                    self.user_states.pop(uid)
+                    self._departed.add(uid)
+                for member in members:
+                    if self._tracked(member):
+                        self._departed.discard(member.id)
+                        if member.id not in self.user_states:
+                            await self._apply_state(*self._snapshot(member, now))
+        logger.info("[UserStats] Synced %s accounts and %s voice channels", len(accounts), len(channels))
+        return members, complete
 
     @tasks.loop(hours=24)
     async def daily_profile_sync(self) -> None:
-        """Scheduled mass synchronization to update avatar URLs and nicknames from Discord."""
-        self.guild = self.bot.get_guild(self.guild_id)
-        if not self.guild:
+        if self._skip_first_daily:
+            self._skip_first_daily = False
             return
-        logger.info("[UserStats] Executing daily full profile synchronization...")
         try:
-            # Sync channels topology structure
-            batch_channels = []
-            for channel in self.guild.voice_channels:
-                batch_channels.append((channel.id, channel.name, True))
-            if batch_channels:
-                await self.repo.bulk_upsert_channels(batch_channels)
-
-            # Sync user configurations profiles
-            batch_data = []
-            for member in self.guild.members:
-                if member.bot and member.id != self.bot.user.id:
-                    continue
-                avatar_url = str(member.display_avatar.url) if member.display_avatar else ""
-                current_status = get_member_state(member)
-                batch_data.append((
-                    member.id,
-                    member.name,
-                    member.display_name,
-                    avatar_url,
-                    current_status
-                ))
-            if batch_data:
-                await self.repo.bulk_upsert_accounts(batch_data)
-                logger.info(f"[UserStats] Successfully synced {len(batch_data)} profiles and {len(batch_channels)} voice channels.")
-        except Exception as e:
-            logger.error(f"Error in daily profile sync: {e}")
+            await self._sync_profiles()
+        except Exception:
+            logger.exception("[UserStats] Daily profile sync failed")
 
     @tasks.loop(hours=1)
     async def clean_old_stats(self) -> None:
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.retention_days)
         try:
-            await self.repo.clean_old_records(cutoff_date)
-        except Exception as e:
-            logger.error(f"Error cleaning old stats: {e}")
+            await self.repo.clean_old_records(datetime.now(timezone.utc) - timedelta(days=self.retention_days))
+        except Exception:
+            logger.exception("[UserStats] Cleanup failed")
 
     @tasks.loop(minutes=10)
     async def compress_stats(self) -> None:
-        since_date = datetime.now(timezone.utc) - timedelta(days=2)
         try:
-            await self.repo.compress_records(since_date)
-        except Exception as e:
-            logger.error(f"Error in compress_stats: {e}")
+            await self.repo.compress_records(datetime.now(timezone.utc) - timedelta(days=2))
+        except Exception:
+            logger.exception("[UserStats] Compression failed")
 
     async def stop(self) -> None:
-        now_utc = datetime.now(timezone.utc)
-        tasks_to_save = []
-        user_states_copy = list(self.user_states.items())
-        
-        for account_id, state_info in user_states_copy:
-            member = self.guild.get_member(account_id) if self.guild else None
-            last_time = state_info['start_time']
-            state = state_info['state']
-            channel_id = state_info['channel_id']
-            
-            if now_utc > last_time:
-                if member:
-                    tasks_to_save.append(
-                        self.record_state_period(member, state, last_time, now_utc, channel_id)
-                    )
-                else:
-                    async def save_fallback(acc_id=account_id, st=state, lt=last_time, nt=now_utc, ch_id=channel_id):
-                        if ch_id and not await self.repo.is_channel_exist(ch_id):
-                            ch_obj = self.guild.get_channel(ch_id) if self.guild else None
-                            ch_name = ch_obj.name if ch_obj else f"Unknown Channel {ch_id}"
-                            await self.repo.create_channel(ch_id, ch_name, is_active=True)
-                            
-                        if lt.date() != nt.date():
-                            await self.record_period_split(acc_id, st, lt, nt, ch_id)
-                        else:
-                            await self.repo.save_period(acc_id, st, lt, nt, ch_id)
-                    
-                    tasks_to_save.append(save_fallback())
-            
-        if tasks_to_save:
-            await asyncio.gather(*tasks_to_save, return_exceptions=True)
-            
-        self.periodic_stats_update.cancel()
-        self.clean_old_stats.cancel()
-        self.compress_stats.cancel()
-        self.periodic_state_fixation.cancel()
-        self.daily_profile_sync.cancel()
+        self._stopping = True
+        self._ready = False
+        for name in self.EVENTS:
+            self.bot.remove_listener(getattr(self, name))
+        self.bot.remove_listener(self._on_gateway_ready, "on_ready")
+
+        loops = (self.write_queue, self.periodic_state_fixation, self.daily_profile_sync,
+                 self.clean_old_stats, self.compress_stats)
+        running = [loop.get_task() for loop in loops if loop.is_running()]
+        for loop in loops:
+            loop.cancel()
+        self._init_task.cancel()
+        await asyncio.gather(self._init_task, *(task for task in running if task), return_exceptions=True)
+
+        now = datetime.now(timezone.utc)
+        for uid in list(self.user_states):
+            self._flush_one(uid, now)
+
+        async def flush_remaining():
+            while self._period_queue or self._pending_status or self._pending_members or self._pending_membership:
+                old_count = len(self._period_queue) + len(self._pending_status) + len(self._pending_members) + len(self._pending_membership)
+                await self._drain_queue()
+                new_count = len(self._period_queue) + len(self._pending_status) + len(self._pending_members) + len(self._pending_membership)
+                if new_count >= old_count:  # Database error; avoid retrying endlessly on shutdown.
+                    break
+
+        try:
+            await asyncio.wait_for(flush_remaining(), timeout=6)
+        except asyncio.TimeoutError:
+            logger.error("[UserStats] Shutdown queue flush timed out")
+        if self._period_queue or self._pending_status or self._pending_members or self._pending_membership:
+            logger.error("[UserStats] Unwritten data: %d periods, %d statuses, %d accounts, %d memberships",
+                         len(self._period_queue), len(self._pending_status), len(self._pending_members), len(self._pending_membership))
         self.user_states.clear()
-        logger.info("[UserStats] Tracker stopped.")
+        logger.info("[UserStats] Tracker stopped")

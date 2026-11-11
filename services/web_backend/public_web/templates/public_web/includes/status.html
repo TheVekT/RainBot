@@ -1,5 +1,6 @@
-<span class="status {% if account.current_status == 'offline' %}status--offline{% elif 'voice' in account.current_status %}status--voice{% else %}status--online{% endif %}">
-{% if account.current_status == 'offline' %}Offline
+<span class="status {% if not account.is_member or account.current_status == 'offline' %}status--offline{% elif 'voice' in account.current_status %}status--voice{% else %}status--online{% endif %}">
+{% if not account.is_member %}Left server
+{% elif account.current_status == 'offline' %}Offline
 {% elif account.current_status == 'online' %}Online
 {% elif account.current_status == 'voice_online' %}Voice Online
 {% elif account.current_status == 'voice_mute' %}Voice Muted
