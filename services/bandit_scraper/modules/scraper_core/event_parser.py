@@ -29,6 +29,8 @@ class RainParser(BrowserParser):
         self._old_scrap = 0.0
         self._old_users = 0
         self._restart_pending = False
+        # Uptime can distinguish planned maintenance from emergency recovery.
+        self._post_rain_restart_started_at = None
         self._last_recovery_attempt = None
         self.recovery_backoff_seconds = 30.0
         self.recovery_error_threshold = 3
@@ -52,6 +54,13 @@ class RainParser(BrowserParser):
             return await BrowserParser.restart_browser(self, force=force)
         if self.rain_now and not force:
             return False
+        planned = (not force and self._restart_pending and self.last_event_time is not None
+                   and 0 <= (datetime.datetime.now() - self.last_event_time).total_seconds() < self.cooldown_after_rain)
+        self._post_rain_restart_started_at = time.monotonic() if planned else None
+        # A previous page's readiness is never proof that the new page is ready.
+        self._readiness_driver = None
+        self._last_readiness_check = None
+        self._page_ready = False
         old_restart = self.last_restart_time
         log.info('Browser restart started: %s', 'recovery' if force else 'post-rain or initial')
 
@@ -66,13 +75,18 @@ class RainParser(BrowserParser):
                         raise
                     log.warning('Could not configure browser command timeout: %s', exc)
 
-        await self._worker(restart)
+        try:
+            await self._worker(restart)
+        except BaseException:
+            self._post_rain_restart_started_at = None
+            raise
         succeeded = self.driver is not None and self.last_restart_time != old_restart
         if succeeded:
             self._restart_pending = False
             self._consecutive_errors = 0
             log.info('Browser restart completed')
         else:
+            self._post_rain_restart_started_at = None
             log.warning('Browser restart did not complete; will retry')
         return succeeded
 
@@ -108,6 +122,9 @@ class RainParser(BrowserParser):
         if self._last_recovery_attempt is not None and now - self._last_recovery_attempt < self.recovery_backoff_seconds:
             return False
         self._last_recovery_attempt = now
+        # Recovery is never the scheduled post-rain maintenance, even if it
+        # follows it before the new page became ready.
+        self._post_rain_restart_started_at = None
         if self.rain_now:
             self._state_uncertain = True
         log.warning('Attempting emergency browser recovery: %s', reason)
@@ -158,6 +175,7 @@ class RainParser(BrowserParser):
             if not self._page_ready:
                 log.info('Page is ready: chat found on %s', self.url)
             self._page_ready = True
+            self._post_rain_restart_started_at = None
             self._readiness_unready_since = None
         elif self._readiness_unready_since is None:
             self._page_ready = False
