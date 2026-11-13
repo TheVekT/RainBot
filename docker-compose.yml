@@ -53,6 +53,7 @@ services:
       context: ./services/bandit_scraper
       dockerfile: Dockerfile
     container_name: rainbot_scraper
+    init: true
     restart: always
     env_file:
       - .env
@@ -84,6 +85,7 @@ services:
       - ./services/bot_telegram:/app
 
   bot_discord:
+    init: true
     build:
       context: ./services/bot_discord
       dockerfile: Dockerfile
