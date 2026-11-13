@@ -114,6 +114,7 @@ services:
     build:
       context: ./services/bandit_scraper
       dockerfile: Dockerfile
+    container_name: rainbot_uptime_web
     restart: always
     init: true
     env_file:
