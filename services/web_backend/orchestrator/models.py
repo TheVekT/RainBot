@@ -88,6 +88,9 @@ class UptimeComponent(models.Model):
     class Meta:
         db_table = 'uptime_component'
 
+    def __str__(self):
+        return f"{self.name} ({self.key})"
+
 
 class UptimePeriod(models.Model):
     component = models.ForeignKey(UptimeComponent, on_delete=models.CASCADE, related_name='periods')
@@ -103,6 +106,9 @@ class UptimePeriod(models.Model):
         indexes = [models.Index(fields=['component', 'started_at'])]
         constraints = [models.UniqueConstraint(fields=['component'], condition=models.Q(ended_at__isnull=True), name='uptime_one_open_period')]
 
+    def __str__(self):
+        return f"{self.component}: {self.status} since {self.started_at}"
+
 
 class UptimeSnapshot(models.Model):
     component = models.ForeignKey(UptimeComponent, on_delete=models.CASCADE, related_name='snapshots')
@@ -114,6 +120,9 @@ class UptimeSnapshot(models.Model):
     class Meta:
         db_table = 'uptime_snapshot'
         indexes = [models.Index(fields=['component', 'observed_at'])]
+
+    def __str__(self):
+        return f"{self.component}: {self.status} at {self.observed_at}"
         
 class DiscordBotConfig(models.Model):
     guild_id = models.BigIntegerField(primary_key=True, help_text="Discord Server (Guild) ID")
