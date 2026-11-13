@@ -1,0 +1,30 @@
+.page-shell.status-page { max-width: 960px; margin: 0 auto; }
+.status-intro { margin: 48px 0 30px; }
+.status-eyebrow { color: #8995a4; font-size: .7rem; letter-spacing: .14em; font-weight: 700; }
+.status-intro h1 { font-size: clamp(1.7rem, 4vw, 2.25rem); line-height: 1.2; margin: 8px 0; font-weight: 700; }
+.status-intro > p:last-child { color: var(--muted, #9299a6); font-size: .94rem; }
+.status-panel { border: 1px solid var(--surface-border, #343944); border-radius: 12px; overflow: hidden; background: var(--surface, #15171a); }
+.status-row { padding: 22px 26px; border-bottom: 1px solid var(--surface-border, #343944); }
+.status-row:last-child { border-bottom: 0; }
+.status-heading, .status-caption { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.status-heading h2 { margin: 0; font-size: .94rem; font-weight: 650; }
+.status-label { font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.status-label--up { color: #42b883; } .status-label--degraded { color: #dfaa3d; }
+.status-label--down { color: #e86767; } .status-label--unknown { color: #9299a6; }
+.status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+.status-bars { display: flex; gap: 3px; margin: 16px 0 10px; height: 28px; }
+.status-bar { position: relative; flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 2px; cursor: pointer; background: linear-gradient(to top, #38ad75 0 var(--up), #dca436 var(--up) var(--degraded), #d85f62 var(--degraded) var(--down), #777f8e var(--down) 100%); }
+.status-bar--issue::after { content: ''; position: absolute; width: 3px; height: 3px; background: #ef7c69; border-radius: 50%; left: 50%; top: -5px; transform: translateX(-50%); }
+.status-bar:hover { filter: brightness(1.2); } .status-bar:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.status-caption, .status-explanation { font-size: .75rem; color: var(--muted, #9299a6); }
+.status-caption > span:nth-child(2) { text-align: center; } .status-caption strong { color: var(--text, #d6d9de); font-weight: 600; }
+.status-explanation { margin: 20px 4px 50px; line-height: 1.6; }
+.status-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 9px; }
+.status-legend span, .status-tooltip span { display: flex; align-items: center; gap: 7px; }
+.status-legend i, .status-tooltip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-up { background: #38ad75; } .legend-degraded { background: #dca436; } .legend-down { background: #d85f62; } .legend-unknown { background: #777f8e; }
+.status-tooltip { position: fixed; z-index: 1000; width: 235px; padding: 14px 15px; border: 1px solid #3d4650; border-radius: 8px; color: #e9edf1; background: #1d2229; box-shadow: 0 10px 28px #0008; pointer-events: none; font-size: .78rem; }
+.status-tooltip[hidden] { display: none; } .status-tooltip > div { display: flex; justify-content: space-between; margin: 7px 0; gap: 8px; }
+.tooltip-title { margin: 0 0 10px; font-weight: 700; } .status-tooltip strong { font-weight: 600; }
+.tooltip-footnote { color: #a3adb9; border-top: 1px solid #3d4650; margin: 10px 0 0; padding-top: 9px; font-size: .7rem; }
+@media (max-width: 600px) { .status-intro { margin-top: 30px; } .status-row { padding: 18px 14px; } .status-bars { gap: 1px; height: 24px; } .status-caption { font-size: .68rem; } .status-coverage { display: block; } }

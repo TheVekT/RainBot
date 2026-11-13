@@ -30,6 +30,8 @@ from cogs.stats_cog import StatsCog
 from cogs.get_role_cog import GetRoleCog
 from cogs.wake_cog import WakeCog
 from rain_notify_config_provider import DatabaseConfigProvider
+from uptime_observer.discord_bot import create_observer as create_discord_observer
+from uptime_observer.discord_stats_tracker import create_observer as create_stats_observer
 
 # Configure logging
 logging.basicConfig(
@@ -73,6 +75,7 @@ async def main() -> None:
 
     db_pool = None
     presence_tracker = None
+    uptime_observers = []
     try:
         # 2. Initialize database connection pool
         logger.info("Connecting to PostgreSQL...")
@@ -113,6 +116,9 @@ async def main() -> None:
             repo=presence_repo,
             retention_days=config_manager.user_stats_retention_days
         )
+        uptime_observers = [create_discord_observer(bot), create_stats_observer(presence_tracker, bot)]
+        for observer in uptime_observers:
+            observer.start()
 
         # 6. Initialize audio and notification components
         config_provider = DatabaseConfigProvider(db_pool, config_manager.guild_id)
@@ -158,6 +164,8 @@ async def main() -> None:
     except Exception as e:
         logger.exception("An unexpected error occurred during execution: %s", e)
     finally:
+        for observer in uptime_observers:
+            await observer.stop()
         if presence_tracker:
             logger.info("Stopping user presence tracker...")
             await presence_tracker.stop()

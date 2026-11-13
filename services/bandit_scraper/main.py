@@ -16,6 +16,8 @@ from modules.scraper_core.parser import RainParser
 from modules.rain_stats.stats import RainStatsRecorder
 from config import ScraperConfigManager
 from grpc_client import OrchestratorNotifier
+from uptime_common import Observer
+from uptime_observer.scraper.observer import ScraperProbe
 
 async def main():
     """
@@ -45,12 +47,15 @@ async def main():
 
     logger.info("[INIT] Components connected. Starting background tasks...")
     await tracker.start()
+    uptime_observer = Observer('scraper', ScraperProbe(parser, tracker), interval_seconds=30)
+    uptime_observer.start()
 
     try:
         await parser.run()
     except asyncio.CancelledError:
         logger.info("[SHUTDOWN] Shutdown signal received...")
     finally:
+        await uptime_observer.stop()
         await tracker.stop()
         await notifier.close()
         await parser.close_browsers()
