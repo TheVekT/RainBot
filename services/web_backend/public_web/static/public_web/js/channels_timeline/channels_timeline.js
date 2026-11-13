@@ -89,8 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTimeView();
     }
 
-    // A typical mouse-wheel notch moves roughly five seconds; smaller trackpad
-    // deltas provide finer control. Leave browser zoom and horizontal scrolling alone.
+    // Move one minute per wheel gesture; leave browser zoom alone.
+    let wheelRemainder = 0;
     captureArea.parentElement.addEventListener('wheel', (e) => {
         if (e.ctrlKey || e.deltaY === 0) return;
 
@@ -99,8 +99,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const daySeconds = (localEnd - localStart) / 1000;
         if (!(daySeconds > 0)) return;
 
-        const deltaPixels = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? captureArea.clientHeight : 1);
-        const deltaSeconds = Math.max(-15, Math.min(15, deltaPixels * 0.05));
+        e.preventDefault();
+        wheelRemainder += e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1);
+        const steps = Math.trunc(wheelRemainder / 120);
+        if (!steps) return;
+        wheelRemainder -= steps * 120;
+        const deltaSeconds = steps * 60;
         const nextPercentage = Math.max(0, Math.min(1, sliderPercentage + deltaSeconds / daySeconds));
         if (nextPercentage === sliderPercentage) return;
 
@@ -110,28 +114,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: false });
 
     captureArea.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
         isDraggingSlider = true;
         handleTimelineMove(e.clientX);
     });
 
+    let precisionDrag = false;
+    let lastDragX = 0;
     const timelineSlider = document.getElementById('timeline-slider');
     if (timelineSlider) {
         timelineSlider.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 && e.button !== 2) return;
             e.stopPropagation();
             isDraggingSlider = true;
+            precisionDrag = e.button === 2;
+            lastDragX = e.clientX;
             e.preventDefault();
+            if (precisionDrag) {
+                const request = timelineSlider.requestPointerLock?.();
+                if (request && request.catch) request.catch(() => {});
+            }
         });
+        timelineSlider.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     document.addEventListener('mousemove', (e) => {
-        if (isDraggingSlider) {
+        if (!isDraggingSlider) return;
+        if (precisionDrag) {
+            const dx = document.pointerLockElement === timelineSlider ? e.movementX : e.clientX - lastDragX;
+            lastDragX = e.clientX;
+            const start = Math.floor(new Date(`${currentDateString}T00:00:00`).getTime() / 1000);
+            const end = Math.floor(new Date(`${currentDateString}T23:59:59.999`).getTime() / 1000);
+            sliderPercentage = Math.max(0, Math.min(1, sliderPercentage + dx / (end - start)));
+            updateTimeView();
+        } else {
             handleTimelineMove(e.clientX);
         }
     });
 
     document.addEventListener('mouseup', () => {
         isDraggingSlider = false;
+        precisionDrag = false;
+        if (document.pointerLockElement === timelineSlider) document.exitPointerLock();
+    });
+    document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === timelineSlider && !precisionDrag) document.exitPointerLock();
+        else if (!document.pointerLockElement && precisionDrag) {
+            precisionDrag = false;
+            isDraggingSlider = false;
+        }
     });
 
     // Guide hover tooltip calculations

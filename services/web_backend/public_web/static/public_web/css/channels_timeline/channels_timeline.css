@@ -39,3 +39,8 @@
     .chronology-chart { height: clamp(160px, 25dvh, 220px); }
     .chart-axis { font-size: 10px; }
 }
+
+.time-scrubber { display: none; }
+@media (max-width: 760px) { .time-scrubber { display: flex; align-items: center; gap: 12px; margin-top: 22px; } .time-scrubber label, .time-scrubber output { color: var(--muted); font-size: 12px; white-space: nowrap; } .time-scrubber input { flex: 1; min-width: 0; height: 24px; accent-color: var(--accent); } }
+
+#timeline-slider::before { content: ""; position: absolute; inset: 0 -6px; }

@@ -3,7 +3,7 @@
 {% block title %}{{ user_profile.nickname }} — RainBot Analytics{% endblock %}
 {% block users_active %}aria-current="page"{% endblock %}
 {% block styles %}
-<link rel="stylesheet" href="{% static 'public_web/css/user_detail/user_detail.css' %}?v=20261106">
+<link rel="stylesheet" href="{% static 'public_web/css/user_detail/user_detail.css' %}?v=20261113c">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
 {% block content %}
@@ -40,6 +40,7 @@
                 </div>
                 <div id="timeline-labels" class="relative w-full flex justify-between mt-3 text-xs text-gray-400 tabular"><span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span></div>
             </div>
+            <div class="time-scrubber"><label for="timeline-time-input">Inspect time</label><input id="timeline-time-input" type="range" min="0" max="1000" value="500" aria-label="Selected time in visible period" aria-valuetext="No time selected"></div>
             <div class="presence-legend">
                 <span><i style="--state-color:#22c55e"></i>Online</span><span><i style="--state-color:#06b6d4"></i>Voice active</span><span><i style="--state-color:#84cc16"></i>Voice muted</span><span><i style="--state-color:#ef4444"></i>Voice deafened</span><span><i style="--state-color:#ec4899"></i>Voice AFK</span><span><i style="--state-color:#8b5cf6"></i>Alone in voice</span><span><i style="--state-color:#4b5563"></i>Offline</span>
             </div>
@@ -77,6 +78,6 @@
     <script src="{% static 'public_web/js/utils.js' %}?v=20261106"></script>
     <script src="{% static 'public_web/js/channels_timeline/calendar.js' %}?v=20261106"></script>
     <script src="{% static 'public_web/js/user_detail/heatmap.js' %}?v=20261106"></script>
-    <script src="{% static 'public_web/js/user_detail/timeline.js' %}?v=20261106"></script>
+    <script src="{% static 'public_web/js/user_detail/timeline.js' %}?v=20261113c"></script>
     <script src="{% static 'public_web/js/user_detail/user_detail.js' %}?v=20261106"></script>
 {% endblock %}
