@@ -15,12 +15,11 @@ import asyncpg
 from db import TelegramDB
 from bot import TelegramBot
 from grpc_server import TelegramServicer, start_grpc_server
+from uptime_observer.telegram_bot import create_observer
+from utils.logging_config import configure_logging
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +41,7 @@ async def main() -> None:
         sys.exit(1)
 
     db_pool = None
+    uptime_observer = None
     try:
         # 2. Initialize database connection pool via asyncpg
         logger.info("Connecting to PostgreSQL...")
@@ -52,6 +52,8 @@ async def main() -> None:
         # 3. Initialize the Telegram Bot instance wrapper
         # Injecting the raw asyncpg pool to decouple from legacy blockings
         tg_bot = TelegramBot(token, db)
+        uptime_observer = create_observer(tg_bot)
+        uptime_observer.start()
         await tg_bot.set_commands()
 
         # 4. Initialize gRPC Servicer and connect signals to wrapper notification methods
@@ -80,6 +82,11 @@ async def main() -> None:
     finally:
         # 7. Graceful teardown of all application allocations
         logger.info("Stopping components...")
+        if uptime_observer:
+            try:
+                await uptime_observer.stop()
+            except Exception:
+                logger.exception("Failed to stop Telegram uptime observer")
         if 'tg_bot' in locals():
             await tg_bot.application.updater.stop()
             await tg_bot.application.stop()

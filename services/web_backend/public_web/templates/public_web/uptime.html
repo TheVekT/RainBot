@@ -1,0 +1,29 @@
+{% extends 'public_web/base.html' %}
+{% load static %}
+{% block title %}System status — RainBot Analytics{% endblock %}
+{% block page_class %}status-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'public_web/css/uptime.css' %}?v=2">{% endblock %}
+{% block content %}
+<header class="status-intro"><p class="status-eyebrow">RAINBOT ANALYTICS</p><h1>System status</h1><p>Service availability and monitoring history for the last 90 days.</p></header>
+<section class="status-panel" aria-label="Service availability">
+  {% for row in rows %}
+  <article class="status-row">
+    <div class="status-heading"><h2>{{ row.display_name }}</h2><span class="status-label status-label--{{ row.status }}"><span aria-hidden="true" class="status-dot"></span>{% if row.status == 'up' %}Operational{% elif row.status == 'degraded' %}Degraded{% elif row.status == 'down' %}Unavailable{% else %}Unknown{% endif %}</span></div>
+    <div class="status-bars" aria-label="90 day availability history for {{ row.display_name }}">
+      {% for day in row.days %}<button type="button" class="status-bar{% if day.has_issue %} status-bar--issue{% endif %}" aria-describedby="status-tooltip" aria-label="{{ day.label }}. Operational {{ day.up }}, degraded {{ day.degraded }}, unavailable {{ day.down }}, unknown {{ day.unknown }}." data-range="{{ day.label }}" data-up="{{ day.up }}" data-degraded="{{ day.degraded }}" data-down="{{ day.down }}" data-unknown="{{ day.unknown }}" style="--up: {{ day.up_pct }}%; --degraded: {{ day.degraded_end }}%; --down: {{ day.down_end }}%"></button>{% endfor %}
+    </div>
+    <div class="status-caption"><span>90 days ago</span><span>{% if row.uptime is not None %}<strong>{{ row.uptime }}% uptime</strong> <span class="status-coverage">· {{ row.coverage }}% observed</span>{% else %}No observations yet{% endif %}</span><span>Today</span></div>
+  </article>
+  {% endfor %}
+</section>
+<div class="status-explanation"><div class="status-legend"><span><i class="legend-up"></i>Operational</span><span><i class="legend-degraded"></i>Degraded</span><span><i class="legend-down"></i>Unavailable</span><span><i class="legend-unknown"></i>Unknown</span></div><p>Each bar is a rolling 24-hour period; colors show the share of time in each state. A dot marks any incident. Hover or focus a bar for details. Uptime excludes unknown time.</p></div>
+<div class="status-tooltip" id="status-tooltip" role="tooltip" hidden>
+  <p class="tooltip-title" data-tooltip="range"></p>
+  <div><span><i class="legend-up"></i>Operational</span><strong data-tooltip="up"></strong></div>
+  <div><span><i class="legend-degraded"></i>Degraded</span><strong data-tooltip="degraded"></strong></div>
+  <div><span><i class="legend-down"></i>Unavailable</span><strong data-tooltip="down"></strong></div>
+  <div><span><i class="legend-unknown"></i>Unknown</span><strong data-tooltip="unknown"></strong></div>
+  <p class="tooltip-footnote">Times shown in the server timezone</p>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'public_web/js/uptime.js' %}?v=2" defer></script>{% endblock %}

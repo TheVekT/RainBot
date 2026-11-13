@@ -193,6 +193,9 @@ function renderTimeline(targetDateStr) {
         currentTimelineDate = targetDateStr;
         zoomStartTs = null;
         zoomEndTs = null;
+        activeSliderTimestamp = null;
+        document.getElementById('timeline-slider')?.classList.add('hidden');
+        document.getElementById('slider-tooltip')?.classList.add('hidden');
     }
 
     const track = document.getElementById('timeline-track');
@@ -215,6 +218,7 @@ function renderTimeline(targetDateStr) {
     const viewDuration = viewEndTs - viewStartTs;
 
     updateTimelineLabels(viewStartTs, viewEndTs);
+    syncPresenceSlider();
 
     const visiblePeriods = rawHistory.filter(item => item[1] < viewEndTs && item[2] > viewStartTs);
 
@@ -262,13 +266,43 @@ function renderTimeline(targetDateStr) {
                 tooltip.innerHTML = `
                     <div class="font-bold text-brand-400">${stateStr.replace('_', ' ').toUpperCase()}</div>
                     ${chName !== 'N/A' ? `<div class="text-gray-300 font-medium flex items-center gap-1.5">${VOICE_ICON} ${chName}</div>` : ''}
-                    <div class="text-gray-500 mt-0.5">${displayStart} — ${displayEnd}</div>
+                    <div class="text-gray-500 mt-0.5">${displayStart} вЂ” ${displayEnd}</div>
                 `;
             });
         }
 
         track.appendChild(segment);
     });
+}
+
+// Keep the mobile control and marker in sync with the current view, including no selection.
+function presenceViewBounds() {
+    const start = Math.floor(new Date(`${currentTimelineDate}T00:00:00`).getTime() / 1000);
+    const end = Math.floor(new Date(`${currentTimelineDate}T23:59:59.999`).getTime() / 1000);
+    return [zoomStartTs !== null ? zoomStartTs : start, zoomEndTs !== null ? zoomEndTs : end];
+}
+
+function syncPresenceSlider(showTooltip = false) {
+    if (!currentTimelineDate) return;
+    const track = document.getElementById('timeline-track');
+    const slider = document.getElementById('timeline-slider');
+    const input = document.getElementById('timeline-time-input');
+    const [start, end] = presenceViewBounds();
+    if (activeSliderTimestamp === null) {
+        slider.classList.add('hidden');
+        if (input) { input.value = 500; input.setAttribute('aria-valuetext', 'No time selected'); }
+        return;
+    }
+    activeSliderTimestamp = Math.max(start, Math.min(end, Math.round(activeSliderTimestamp)));
+    const pct = (activeSliderTimestamp - start) / (end - start);
+    slider.style.left = `${pct * 100}%`;
+    slider.classList.remove('hidden');
+    const time = new Date(activeSliderTimestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    if (input) { input.value = Math.round(pct * 1000); input.setAttribute('aria-valuetext', time); }
+    if (showTooltip) {
+        const rect = track.getBoundingClientRect();
+        updateSliderTooltip(activeSliderTimestamp, rect.left + pct * rect.width);
+    }
 }
 
 // Setup Timeline interaction listeners
@@ -282,6 +316,33 @@ document.addEventListener('DOMContentLoaded', () => {
         let zoomStartX = 0;
         let zoomOverlay = null;
         let trackMouseDownX = 0;
+        let precisionDrag = false;
+        let lastDragX = 0;
+        const timeInput = document.getElementById('timeline-time-input');
+        const selectInputTime = () => {
+            const [start, end] = presenceViewBounds();
+            activeSliderTimestamp = Math.round(start + (end - start) * Number(timeInput.value) / 1000);
+            syncPresenceSlider(true);
+        };
+        timeInput?.addEventListener('input', selectInputTime);
+        timeInput?.addEventListener('pointerup', () => {
+            if (activeSliderTimestamp === null) selectInputTime();
+        });
+        let wheelRemainder = 0;
+        trackElement.parentElement.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || !e.deltaY || activeSliderTimestamp === null) return;
+            e.preventDefault();
+            wheelRemainder += e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1);
+            const steps = Math.trunc(wheelRemainder / 120);
+            if (!steps) return;
+            wheelRemainder -= steps * 120;
+            const [start, end] = presenceViewBounds();
+            const next = Math.max(start, Math.min(end, activeSliderTimestamp + steps * 60));
+            if (next === activeSliderTimestamp) return;
+            e.preventDefault();
+            activeSliderTimestamp = next;
+            syncPresenceSlider(true);
+        }, { passive: false });
 
         trackElement.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
@@ -308,10 +369,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sliderElement.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 && e.button !== 2) return;
             e.stopPropagation(); // Stop zoom drag from starting
             isDraggingSlider = true;
+            precisionDrag = e.button === 2;
+            lastDragX = e.clientX;
             e.preventDefault();
+            if (precisionDrag) {
+                const request = sliderElement.requestPointerLock?.();
+                if (request && request.catch) request.catch(() => {});
+            }
         });
 
         sliderElement.addEventListener('mouseenter', () => {
@@ -349,22 +416,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (isDraggingSlider) {
-                const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-                sliderElement.style.left = `${(currentX / rect.width) * 100}%`;
-
-                const localStart = new Date(`${currentTimelineDate}T00:00:00`);
-                const localEnd = new Date(`${currentTimelineDate}T23:59:59.999`);
-                const dayStartTs = Math.floor(localStart.getTime() / 1000);
-                const dayEndTs = Math.floor(localEnd.getTime() / 1000);
-
-                const currentViewStart = zoomStartTs !== null ? zoomStartTs : dayStartTs;
-                const currentViewEnd = zoomEndTs !== null ? zoomEndTs : dayEndTs;
-                const currentViewDur = currentViewEnd - currentViewStart;
-
-                const pct = currentX / rect.width;
-                activeSliderTimestamp = Math.floor(currentViewStart + currentViewDur * pct);
-
-                updateSliderTooltip(activeSliderTimestamp, rect.left + currentX);
+                if (precisionDrag) {
+                    const dx = document.pointerLockElement === sliderElement ? e.movementX : e.clientX - lastDragX;
+                    lastDragX = e.clientX;
+                    activeSliderTimestamp += dx;
+                } else {
+                    const [start, end] = presenceViewBounds();
+                    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    activeSliderTimestamp = Math.round(start + pct * (end - start));
+                }
+                syncPresenceSlider(true);
             }
         });
 
@@ -401,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const pct = clickX / rect.width;
                         activeSliderTimestamp = Math.floor(currentViewStart + currentViewDur * pct);
 
-                        updateSliderTooltip(activeSliderTimestamp, rect.left + clickX);
+                        syncPresenceSlider(true);
                     } else if (overlayWidth > 10) {
                         // Zoom logic
                         const localStart = new Date(`${currentTimelineDate}T00:00:00`);
@@ -430,6 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isDraggingSlider) {
                 isDraggingSlider = false;
+                precisionDrag = false;
+                if (document.pointerLockElement === sliderElement) document.exitPointerLock();
                 // Hide tooltip if cursor is not over the slider element
                 const rectSlider = sliderElement.getBoundingClientRect();
                 const isHovering = (
@@ -442,6 +505,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     sliderTooltip.classList.add('hidden');
                 }
             }
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === sliderElement && !precisionDrag) document.exitPointerLock();
+            else if (!document.pointerLockElement && precisionDrag) {
+                precisionDrag = false;
+                isDraggingSlider = false;
+            }
+        });
+
+        sliderElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
         });
 
         trackElement.addEventListener('contextmenu', (e) => {

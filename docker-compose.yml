@@ -53,18 +53,21 @@ services:
       context: ./services/bandit_scraper
       dockerfile: Dockerfile
     container_name: rainbot_scraper
+    init: true
     restart: always
     env_file:
       - .env
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
       - ORCHESTRATOR_GRPC_HOST=orchestrator_grpc:50051
+      - PYTHONPATH=/opt
     depends_on:
       - db
       - orchestrator_grpc
     shm_size: '2gb'
     volumes:
       - ./services/bandit_scraper:/app
+      - ./shared/uptime_common:/opt/uptime_common:ro
 
   bot_telegram:
     build:
@@ -77,13 +80,16 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
       - GRPC_PORT=50052
+      - PYTHONPATH=/opt
     depends_on:
       - db
       - orchestrator_grpc
     volumes:
       - ./services/bot_telegram:/app
+      - ./shared/uptime_common:/opt/uptime_common:ro
 
   bot_discord:
+    init: true
     build:
       context: ./services/bot_discord
       dockerfile: Dockerfile
@@ -95,12 +101,34 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
       - GRPC_PORT=50053
       - SOUNDS_DIR=/shared_media/audio
+      - PYTHONPATH=/opt
     depends_on:
       - db
       - orchestrator_grpc
     volumes:
       - ./services/bot_discord:/app
       - ./shared_media:/shared_media
+      - ./shared/uptime_common:/opt/uptime_common:ro
+
+  uptime_web:
+    build:
+      context: ./services/bandit_scraper
+      dockerfile: Dockerfile
+    container_name: rainbot_uptime_web
+    restart: always
+    init: true
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rainbot_db}
+      - PYTHONPATH=/opt:/app
+    volumes:
+      - ./services/web_backend/uptime_observer:/app/uptime_observer:ro
+      - ./shared/uptime_common:/opt/uptime_common:ro
+    command: ["python", "-m", "uptime_observer.runner"]
+    depends_on:
+      - db
+      - web-backend
 
   caddy:
     build:

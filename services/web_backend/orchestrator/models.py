@@ -78,6 +78,42 @@ class RainStat(models.Model):
 
     class Meta:
         db_table = 'rain_stats'
+
+
+class UptimeComponent(models.Model):
+    key = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=200)
+    poll_interval_seconds = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = 'uptime_component'
+
+
+class UptimePeriod(models.Model):
+    component = models.ForeignKey(UptimeComponent, on_delete=models.CASCADE, related_name='periods')
+    status = models.CharField(max_length=16)
+    started_at = models.DateTimeField(db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField()
+    reason = models.TextField(null=True, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'uptime_period'
+        indexes = [models.Index(fields=['component', 'started_at'])]
+        constraints = [models.UniqueConstraint(fields=['component'], condition=models.Q(ended_at__isnull=True), name='uptime_one_open_period')]
+
+
+class UptimeSnapshot(models.Model):
+    component = models.ForeignKey(UptimeComponent, on_delete=models.CASCADE, related_name='snapshots')
+    observed_at = models.DateTimeField(db_index=True)
+    status = models.CharField(max_length=16)
+    details = models.JSONField(default=dict, blank=True)
+    reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'uptime_snapshot'
+        indexes = [models.Index(fields=['component', 'observed_at'])]
         
 class DiscordBotConfig(models.Model):
     guild_id = models.BigIntegerField(primary_key=True, help_text="Discord Server (Guild) ID")
