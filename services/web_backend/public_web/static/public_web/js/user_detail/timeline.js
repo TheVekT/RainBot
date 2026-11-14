@@ -266,7 +266,7 @@ function renderTimeline(targetDateStr) {
                 tooltip.innerHTML = `
                     <div class="font-bold text-brand-400">${stateStr.replace('_', ' ').toUpperCase()}</div>
                     ${chName !== 'N/A' ? `<div class="text-gray-300 font-medium flex items-center gap-1.5">${VOICE_ICON} ${chName}</div>` : ''}
-                    <div class="text-gray-500 mt-0.5">${displayStart} вЂ” ${displayEnd}</div>
+                    <div class="text-gray-500 mt-0.5">${displayStart} — ${displayEnd}</div>
                 `;
             });
         }
