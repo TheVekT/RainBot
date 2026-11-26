@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from .base_parser import RainParser as BrowserParser
 from .browser_cleanup import _is_too_many_open_files
 from .event_observer import EventObserver
+from .chat_activity import ChatActivity
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,10 @@ class RainParser(BrowserParser):
         self._readiness_unready_since = None
         self._last_readiness_check = None
         self._page_ready = False
+        self._last_page_load = None
+        self._next_page_refresh_attempt = None
+        self.page_refresh_interval = 70 * 60
+        self._chat_activity = ChatActivity()
 
     async def _worker(self, fn, *args):
         def invoke():
@@ -84,6 +89,9 @@ class RainParser(BrowserParser):
         if succeeded:
             self._restart_pending = False
             self._consecutive_errors = 0
+            self._last_page_load = time.monotonic()
+            self._next_page_refresh_attempt = None
+            self._chat_activity.reset()
             log.info('Browser restart completed')
         else:
             self._post_rain_restart_started_at = None
@@ -113,6 +121,41 @@ class RainParser(BrowserParser):
             await self._drop_observer()
             self._observer = await self._worker(EventObserver, self.driver)
             self._observed_driver = self.driver
+        return True
+
+    async def _refresh_page_if_due(self):
+        now = time.monotonic()
+        if (self.rain_now or self._state_uncertain or not self.driver or self._last_page_load is None
+                or now - self._last_page_load < self.page_refresh_interval
+                or (self._next_page_refresh_attempt is not None and now < self._next_page_refresh_attempt)):
+            return False
+        # Check the current DOM immediately before refresh, including when an
+        # observer event is still queued. A failed readiness check is not END.
+        text, ready = await self._worker(self._read_ready_snapshot)
+        if not ready:
+            self._next_page_refresh_attempt = now + self.recovery_backoff_seconds
+            return False
+        await self._accept_snapshot(text)
+        if self.rain_now:
+            return False
+        self._next_page_refresh_attempt = now + self.recovery_backoff_seconds
+        log.info('Refreshing page after %.0f minutes without a browser or page restart',
+                 (now - self._last_page_load) / 60)
+        await self._drop_observer()
+        self._readiness_driver = self._last_readiness_check = None
+        self._page_ready = False
+        self._chat_activity.reset()
+        try:
+            await self._worker(self.driver.refresh)
+        except Exception as exc:
+            if _is_too_many_open_files(exc):
+                raise
+            log.warning('Scheduled page refresh failed: %s', exc)
+            await self._recover_if_needed(missing_driver=True, reason='page_refresh_failed')
+            return False
+        self._last_page_load = time.monotonic()
+        self._next_page_refresh_attempt = None
+        log.info('Scheduled page refresh completed')
         return True
 
     async def _recover_if_needed(self, *, missing_driver=False, reason='driver_error'):
@@ -177,6 +220,12 @@ class RainParser(BrowserParser):
             self._page_ready = True
             self._post_rain_restart_started_at = None
             self._readiness_unready_since = None
+            try:
+                await self._worker(self._chat_activity.sample, driver)
+            except Exception as exc:
+                if _is_too_many_open_files(exc):
+                    raise
+                log.warning('Chat activity check failed: %s', exc)
         elif self._readiness_unready_since is None:
             self._page_ready = False
             self._readiness_unready_since = now
@@ -236,6 +285,8 @@ class RainParser(BrowserParser):
                                 await asyncio.sleep(10)
                                 continue
                     await self._watch_page_readiness()
+                    if await self._refresh_page_if_due():
+                        continue
                     if not await self._ensure_observer():
                         await self._recover_if_needed(missing_driver=True)
                         await asyncio.sleep(2)
